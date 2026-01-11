@@ -1,0 +1,37 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+*.o
+*.a
+*.lib
+*.dll
+*.exe
+
+# IDE and editor files
+.vscode/
+.idea/
+.vs/
+*.sln
+*.vcxproj*
+*.user
+*.VC.db
+CMakeSettings.json
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies (FetchContent)
+_deps/
+
+# Temp files
+*.tmp
+*.swp
+*~
