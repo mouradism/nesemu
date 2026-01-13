@@ -66,3 +66,30 @@ else()
   target_include_directories(nesemu PRIVATE src)
   target_link_libraries(nesemu PRIVATE SDL2::SDL2 SDL2::SDL2main)
 endif()
+
+# GTest configuration
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG v1.14.0
+  GIT_SHALLOW TRUE
+)
+
+# For Windows, enable all features
+set(gtest_force_shared_crt ON CACHE BOOL "Use shared C runtime" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+# Enable testing
+enable_testing()
+
+# APU Unit Tests
+add_executable(apu_test
+    src/apu.cpp
+    tests/apu_test.cpp
+)
+
+target_include_directories(apu_test PRIVATE src)
+target_link_libraries(apu_test PRIVATE gtest gtest_main)
+
+add_test(NAME APUTests COMMAND apu_test)
