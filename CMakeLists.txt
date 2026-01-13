@@ -37,6 +37,7 @@ if(NOT SDL2_FOUND)
       src/main.cpp
       src/cpu.cpp
       src/ppu.cpp
+      src/apu.cpp
       src/memory.cpp
       src/cartridge.cpp
       src/video.cpp
@@ -57,6 +58,7 @@ else()
       src/main.cpp
       src/cpu.cpp
       src/ppu.cpp
+      src/apu.cpp
       src/memory.cpp
       src/cartridge.cpp
       src/video.cpp
@@ -93,3 +95,27 @@ target_include_directories(apu_test PRIVATE src)
 target_link_libraries(apu_test PRIVATE gtest gtest_main)
 
 add_test(NAME APUTests COMMAND apu_test)
+
+# PPU Unit Tests
+add_executable(ppu_test
+    src/ppu.cpp
+    src/memory.cpp
+    src/cartridge.cpp
+    tests/ppu_test.cpp
+)
+
+target_include_directories(ppu_test PRIVATE src)
+target_link_libraries(ppu_test PRIVATE gtest gtest_main)
+
+add_test(NAME PPUTests COMMAND ppu_test)
+
+# Cartridge Unit Tests
+add_executable(cartridge_test
+    src/cartridge.cpp
+    tests/cartridge_test.cpp
+)
+
+target_include_directories(cartridge_test PRIVATE src)
+target_link_libraries(cartridge_test PRIVATE gtest gtest_main)
+
+add_test(NAME CartridgeTests COMMAND cartridge_test)
