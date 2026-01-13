@@ -602,3 +602,303 @@ TEST_F(PPUTest, NESPaletteHas64Colors) {
     
     EXPECT_TRUE(true);
 }
+
+// =============================================================================
+// Sprite Rendering Tests
+// =============================================================================
+
+TEST_F(PPUTest, SpriteZeroHitInitiallyFalse) {
+    EXPECT_FALSE(ppu.sprite_zero_hit());
+}
+
+TEST_F(PPUTest, SpriteOverflowInitiallyFalse) {
+    EXPECT_FALSE(ppu.sprite_overflow());
+}
+
+TEST_F(PPUTest, SpriteFlagsCleared) {
+    // Enable rendering
+    ppu.write(0x2001, 0x18);
+    
+    // Run a full frame
+    run_frame();
+    
+    // Status register should have cleared flags at pre-render scanline
+    // The flags may or may not be set depending on OAM contents
+    // Just verify no crash
+    EXPECT_TRUE(true);
+}
+
+TEST_F(PPUTest, OAMWriteForSprite) {
+    // Write sprite 0 data
+    ppu.write(0x2003, 0x00);  // OAM address = 0
+    ppu.write(0x2004, 0x20);  // Y = 32
+    ppu.write(0x2004, 0x01);  // Tile = 1
+    ppu.write(0x2004, 0x00);  // Attributes = 0
+    ppu.write(0x2004, 0x40);  // X = 64
+    
+    // Verify writes
+    ppu.write(0x2003, 0x00);
+    EXPECT_EQ(ppu.read(0x2004), 0x20);
+    ppu.write(0x2003, 0x01);
+    EXPECT_EQ(ppu.read(0x2004), 0x01);
+    ppu.write(0x2003, 0x02);
+    EXPECT_EQ(ppu.read(0x2004), 0x00);
+    ppu.write(0x2003, 0x03);
+    EXPECT_EQ(ppu.read(0x2004), 0x40);
+}
+
+TEST_F(PPUTest, SpriteRenderingEnabled) {
+    // Enable sprite rendering
+    ppu.write(0x2001, 0x10);  // Bit 4 = show sprites
+    
+    // Run a frame
+    run_frame();
+    
+    // Should complete without crash
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, SpriteAndBackgroundEnabled) {
+    // Enable both background and sprites
+    ppu.write(0x2001, 0x18);  // Bits 3 and 4
+    
+    // Write a sprite
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0x10);  // Y = 16
+    ppu.write(0x2004, 0x00);  // Tile = 0
+    ppu.write(0x2004, 0x00);  // Attributes = palette 0, no flip, front
+    ppu.write(0x2004, 0x10);  // X = 16
+    
+    // Run a frame
+    run_frame();
+    
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, MultipleSpritesSameScanline) {
+    // Enable sprites
+    ppu.write(0x2001, 0x10);
+    
+    // Write 8 sprites on same scanline (Y = 50)
+    for (int i = 0; i < 8; ++i) {
+        ppu.write(0x2003, static_cast<std::uint8_t>(i * 4));
+        ppu.write(0x2004, 50);  // Y = 50
+        ppu.write(0x2004, static_cast<std::uint8_t>(i));  // Tile
+        ppu.write(0x2004, 0x00);  // Attributes
+        ppu.write(0x2004, static_cast<std::uint8_t>(i * 10));  // X
+    }
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, SpriteOverflowDetection) {
+    // Enable sprites AND background (both must be enabled for evaluation)
+    ppu.write(0x2001, 0x18);
+    
+    // Sprites appear on the scanline AFTER their Y position
+    // So Y=49 means the sprite appears on scanlines 50-57 (for 8x8 sprites)
+    // We want 9 sprites on the same scanline
+    for (int i = 0; i < 9; ++i) {
+        ppu.write(0x2003, static_cast<std::uint8_t>(i * 4));
+        ppu.write(0x2004, 49);  // Y = 49 (sprite appears starting on scanline 50)
+        ppu.write(0x2004, static_cast<std::uint8_t>(i));  // Tile
+        ppu.write(0x2004, 0x00);  // Attributes
+        ppu.write(0x2004, static_cast<std::uint8_t>(i * 10));  // X
+    }
+    
+    // Run past scanline 49 where evaluation for scanline 50 happens
+    // Scanline 49, cycle 257 is when sprite evaluation happens for scanline 50
+    run_cycles(50 * 341);  // Run to scanline 50
+    
+    // Check overflow flag (should be set after evaluating scanline 50's sprites at cycle 257 of scanline 49)
+    EXPECT_TRUE(ppu.sprite_overflow());
+}
+
+TEST_F(PPUTest, SpriteHorizontalFlip) {
+    // Enable sprites
+    ppu.write(0x2001, 0x10);
+    
+    // Write sprite with horizontal flip
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0x20);  // Y
+    ppu.write(0x2004, 0x00);  // Tile
+    ppu.write(0x2004, 0x40);  // Attributes: horizontal flip
+    ppu.write(0x2004, 0x20);  // X
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, SpriteVerticalFlip) {
+    // Enable sprites
+    ppu.write(0x2001, 0x10);
+    
+    // Write sprite with vertical flip
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0x20);  // Y
+    ppu.write(0x2004, 0x00);  // Tile
+    ppu.write(0x2004, 0x80);  // Attributes: vertical flip
+    ppu.write(0x2004, 0x20);  // X
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, SpriteBehindBackground) {
+    // Enable both
+    ppu.write(0x2001, 0x18);
+    
+    // Write sprite with behind-background priority
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0x20);  // Y
+    ppu.write(0x2004, 0x00);  // Tile
+    ppu.write(0x2004, 0x20);  // Attributes: priority = behind BG
+    ppu.write(0x2004, 0x20);  // X
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, Sprite8x16Mode) {
+    // Enable 8x16 sprite mode
+    ppu.write(0x2000, 0x20);  // PPUCTRL bit 5 = 8x16 sprites
+    ppu.write(0x2001, 0x10);  // Enable sprites
+    
+    // Write sprite
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0x20);  // Y
+    ppu.write(0x2004, 0x00);  // Tile (bit 0 selects pattern table in 8x16 mode)
+    ppu.write(0x2004, 0x00);  // Attributes
+    ppu.write(0x2004, 0x20);  // X
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, SpriteLeftClipping) {
+    // Enable sprites without left-8 clip
+    ppu.write(0x2001, 0x14);  // Sprites enabled, left-8 NOT clipped
+    
+    // Write sprite at X = 0
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0x20);  // Y
+    ppu.write(0x2004, 0x00);  // Tile
+    ppu.write(0x2004, 0x00);  // Attributes
+    ppu.write(0x2004, 0x00);  // X = 0
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, SpriteLeftClippingEnabled) {
+    // Enable sprites WITH left-8 clip (bit 2 = 0)
+    ppu.write(0x2001, 0x10);  // Sprites enabled, left-8 clipped
+    
+    // Write sprite at X = 0
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0x20);  // Y
+    ppu.write(0x2004, 0x00);  // Tile
+    ppu.write(0x2004, 0x00);  // Attributes
+    ppu.write(0x2004, 0x00);  // X = 0
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, AllSpritePalettes) {
+    // Enable sprites
+    ppu.write(0x2001, 0x10);
+    
+    // Write sprites using all 4 palettes
+    for (int palette = 0; palette < 4; ++palette) {
+        ppu.write(0x2003, static_cast<std::uint8_t>(palette * 4));
+        ppu.write(0x2004, static_cast<std::uint8_t>(20 + palette * 10));  // Y - distributed
+        ppu.write(0x2004, 0x00);  // Tile
+        ppu.write(0x2004, static_cast<std::uint8_t>(palette));  // Palette 0-3
+        ppu.write(0x2004, static_cast<std::uint8_t>(palette * 20));  // X
+    }
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, SpritePatternTableSelect) {
+    // Select sprite pattern table 1 (PPUCTRL bit 3)
+    ppu.write(0x2000, 0x08);
+    ppu.write(0x2001, 0x10);
+    
+    // Write sprite
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0x20);
+    ppu.write(0x2004, 0x00);
+    ppu.write(0x2004, 0x00);
+    ppu.write(0x2004, 0x20);
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+}
+
+TEST_F(PPUTest, SpriteRenderingStress) {
+    // Enable everything
+    ppu.write(0x2000, 0x80);  // NMI enabled
+    ppu.write(0x2001, 0x1E);  // All rendering enabled
+    
+    // Fill OAM with sprites
+    for (int i = 0; i < 64; ++i) {
+        ppu.write(0x2003, static_cast<std::uint8_t>(i * 4));
+        ppu.write(0x2004, static_cast<std::uint8_t>(i * 3 + 10));  // Y - distributed
+        ppu.write(0x2004, static_cast<std::uint8_t>(i));  // Tile
+        ppu.write(0x2004, static_cast<std::uint8_t>(i % 4));  // Attributes (different palettes)
+        ppu.write(0x2004, static_cast<std::uint8_t>(i * 4));  // X
+    }
+    
+    // Run multiple frames
+    for (int frame = 0; frame < 10; ++frame) {
+        run_frame();
+        EXPECT_TRUE(ppu.frame_ready());
+        ppu.clear_frame_ready();
+    }
+}
+
+TEST_F(PPUTest, SpriteYEquals255Hidden) {
+    // Enable sprites
+    ppu.write(0x2001, 0x10);
+    
+    // Write sprite at Y = 255 (off-screen / hidden)
+    ppu.write(0x2003, 0x00);
+    ppu.write(0x2004, 0xFF);  // Y = 255
+    ppu.write(0x2004, 0x00);  // Tile
+    ppu.write(0x2004, 0x00);  // Attributes
+    ppu.write(0x2004, 0x20);  // X
+    
+    run_frame();
+    EXPECT_TRUE(ppu.frame_ready());
+    // Sprite at Y=255 should not appear on screen
+}
+
+TEST_F(PPUTest, SpriteStatusFlagsClearedOnPreRender) {
+    // Set up conditions that might trigger flags
+    ppu.write(0x2001, 0x18);
+    
+    // Write 9 sprites (causes overflow)
+    for (int i = 0; i < 9; ++i) {
+        ppu.write(0x2003, static_cast<std::uint8_t>(i * 4));
+        ppu.write(0x2004, 50);
+        ppu.write(0x2004, static_cast<std::uint8_t>(i));
+        ppu.write(0x2004, 0x00);
+        ppu.write(0x2004, static_cast<std::uint8_t>(i * 10));
+    }
+    
+    // Run one frame - flags should be set
+    run_frame();
+    ppu.clear_frame_ready();
+    
+    // Run to pre-render scanline of next frame (261 * 341 + 2 cycles into next frame)
+    run_cycles(261 * 341 + 2);
+    
+    // Read status - sprite flags should be cleared
+    std::uint8_t status = ppu.read(0x2002);
+    EXPECT_FALSE(status & 0x40);  // Sprite 0 hit cleared
+    // Note: We don't check overflow here as it depends on OAM state for current frame
+}

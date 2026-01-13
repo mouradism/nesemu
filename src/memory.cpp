@@ -15,13 +15,16 @@ std::uint8_t Memory::read(std::uint16_t addr) const {
         // APU and I/O registers
         // TODO: Route to APU/Input
         return 0;
-    } else if (addr >= 0x8000) {
-        // PRG ROM
+    } else if (addr < 0x6000) {
+        // Expansion ROM (rarely used)
+        return 0;
+    } else if (addr < 0x8000) {
+        // PRG RAM ($6000-$7FFF)
+        return cartridge_.read_prg_ram(addr);
+    } else {
+        // PRG ROM ($8000-$FFFF)
         return cartridge_.read_prg(addr);
     }
-    
-    // Unmapped region ($4020-$7FFF) - typically cartridge RAM/mapper
-    return 0;
 }
 
 void Memory::write(std::uint16_t addr, std::uint8_t value) {
@@ -34,8 +37,13 @@ void Memory::write(std::uint16_t addr, std::uint8_t value) {
     } else if (addr < 0x4020) {
         // APU and I/O registers
         // TODO: Route to APU/Input
-    } else if (addr >= 0x8000) {
-        // PRG ROM (writes may be mapper registers)
+    } else if (addr < 0x6000) {
+        // Expansion ROM (rarely used)
+    } else if (addr < 0x8000) {
+        // PRG RAM ($6000-$7FFF)
+        cartridge_.write_prg_ram(addr, value);
+    } else {
+        // PRG ROM ($8000-$FFFF) - writes may be mapper registers
         cartridge_.write_prg(addr, value);
     }
 }

@@ -40,6 +40,7 @@ if(NOT SDL2_FOUND)
       src/apu.cpp
       src/memory.cpp
       src/cartridge.cpp
+      src/mapper.cpp
       src/video.cpp
       src/audio.cpp
   )
@@ -61,6 +62,7 @@ else()
       src/apu.cpp
       src/memory.cpp
       src/cartridge.cpp
+      src/mapper.cpp
       src/video.cpp
       src/audio.cpp
   )
@@ -101,6 +103,7 @@ add_executable(ppu_test
     src/ppu.cpp
     src/memory.cpp
     src/cartridge.cpp
+    src/mapper.cpp
     tests/ppu_test.cpp
 )
 
@@ -112,6 +115,7 @@ add_test(NAME PPUTests COMMAND ppu_test)
 # Cartridge Unit Tests
 add_executable(cartridge_test
     src/cartridge.cpp
+    src/mapper.cpp
     tests/cartridge_test.cpp
 )
 
@@ -119,3 +123,14 @@ target_include_directories(cartridge_test PRIVATE src)
 target_link_libraries(cartridge_test PRIVATE gtest gtest_main)
 
 add_test(NAME CartridgeTests COMMAND cartridge_test)
+
+# Mapper Unit Tests
+add_executable(mapper_test
+    src/mapper.cpp
+    tests/mapper_test.cpp
+)
+
+target_include_directories(mapper_test PRIVATE src)
+target_link_libraries(mapper_test PRIVATE gtest gtest_main)
+
+add_test(NAME MapperTests COMMAND mapper_test)

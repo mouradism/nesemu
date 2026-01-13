@@ -46,6 +46,20 @@ void PPU::reset() {
     bg_next_tile_lsb_ = 0;
     bg_next_tile_msb_ = 0;
     
+    // Reset sprite state
+    sprite_count_ = 0;
+    sprite_zero_hit_possible_ = false;
+    sprite_zero_being_rendered_ = false;
+    
+    for (int i = 0; i < MAX_SPRITES_PER_SCANLINE; ++i) {
+        secondary_oam_[i] = SpriteEntry{};
+        sprite_shifter_pattern_lo_[i] = 0;
+        sprite_shifter_pattern_hi_[i] = 0;
+        sprite_x_counters_[i] = 0;
+        sprite_attributes_[i] = 0;
+        sprite_is_sprite0_[i] = false;
+    }
+    
     std::fill(framebuffer_.begin(), framebuffer_.end(), 0xFF000000);
     std::fill(vram_.begin(), vram_.end(), 0);
     std::fill(palette_.begin(), palette_.end(), 0);
@@ -59,11 +73,17 @@ void PPU::step() {
             // Clear VBlank, sprite 0 hit, and sprite overflow
             clear_vblank();
             status_ &= ~0x60;
+            
+            // Clear sprite shifters
+            for (int i = 0; i < MAX_SPRITES_PER_SCANLINE; ++i) {
+                sprite_shifter_pattern_lo_[i] = 0;
+                sprite_shifter_pattern_hi_[i] = 0;
+            }
         }
         
         // Copy vertical scroll bits from t to v at dots 280-304
         if (cycle_ >= 280 && cycle_ <= 304) {
-            if (mask_ & 0x18) {  // If rendering enabled
+            if (mask_ & 0x18) {
                 transfer_address_y();
             }
         }
@@ -78,42 +98,36 @@ void PPU::step() {
             switch ((cycle_ - 1) % 8) {
                 case 0:
                     load_background_shifters();
-                    // Fetch nametable byte
                     bg_next_tile_id_ = ppu_read(0x2000 | (vram_addr_ & 0x0FFF));
                     break;
                 case 2:
-                    // Fetch attribute table byte
                     bg_next_tile_attrib_ = ppu_read(
                         0x23C0 | (vram_addr_ & 0x0C00) |
                         ((vram_addr_ >> 4) & 0x38) |
                         ((vram_addr_ >> 2) & 0x07)
                     );
-                    // Select correct 2-bit palette from attribute byte
                     if (vram_addr_ & 0x0002) bg_next_tile_attrib_ >>= 2;
                     if (vram_addr_ & 0x0040) bg_next_tile_attrib_ >>= 4;
                     bg_next_tile_attrib_ &= 0x03;
                     break;
                 case 4: {
-                    // Fetch pattern table tile low byte
                     std::uint16_t pattern_addr = 
-                        ((ctrl_ & 0x10) << 8) |  // Background pattern table select
+                        ((ctrl_ & 0x10) << 8) |
                         (static_cast<std::uint16_t>(bg_next_tile_id_) << 4) |
-                        ((vram_addr_ >> 12) & 0x07);  // Fine Y scroll
+                        ((vram_addr_ >> 12) & 0x07);
                     bg_next_tile_lsb_ = ppu_read(pattern_addr);
                     break;
                 }
                 case 6: {
-                    // Fetch pattern table tile high byte
                     std::uint16_t pattern_addr = 
                         ((ctrl_ & 0x10) << 8) |
                         (static_cast<std::uint16_t>(bg_next_tile_id_) << 4) |
                         ((vram_addr_ >> 12) & 0x07) |
-                        0x08;  // High plane offset
+                        0x08;
                     bg_next_tile_msb_ = ppu_read(pattern_addr);
                     break;
                 }
                 case 7:
-                    // Increment horizontal scroll
                     if (mask_ & 0x18) {
                         increment_scroll_x();
                     }
@@ -130,6 +144,16 @@ void PPU::step() {
         if (cycle_ == 257 && (mask_ & 0x18)) {
             load_background_shifters();
             transfer_address_x();
+        }
+        
+        // Sprite evaluation at cycle 257 (for next scanline)
+        if (cycle_ == 257 && scanline_ < 240) {
+            evaluate_sprites();
+        }
+        
+        // Sprite pattern fetching (cycles 257-320)
+        if (cycle_ == 321 && scanline_ < 240) {
+            fetch_sprite_patterns();
         }
     }
     
@@ -157,64 +181,156 @@ void PPU::step() {
     }
 }
 
-std::uint8_t PPU::ppu_read(std::uint16_t addr) {
-    addr &= 0x3FFF;
+void PPU::evaluate_sprites() {
+    // Clear secondary OAM
+    sprite_count_ = 0;
+    sprite_zero_hit_possible_ = false;
     
-    if (addr < 0x2000) {
-        // Pattern tables - read from cartridge CHR ROM/RAM
-        return bus_.cartridge().read_chr(addr);
-    } else if (addr < 0x3F00) {
-        // Nametables
-        return vram_[mirror_nametable_addr(addr) & 0x07FF];
-    } else {
-        // Palette
-        return read_palette(addr);
+    for (int i = 0; i < MAX_SPRITES_PER_SCANLINE; ++i) {
+        secondary_oam_[i] = SpriteEntry{};
+        sprite_is_sprite0_[i] = false;
     }
-}
-
-void PPU::ppu_write(std::uint16_t addr, std::uint8_t value) {
-    addr &= 0x3FFF;
     
-    if (addr < 0x2000) {
-        // Pattern tables - write to cartridge CHR RAM
-        bus_.cartridge().write_chr(addr, value);
-    } else if (addr < 0x3F00) {
-        // Nametables
-        vram_[mirror_nametable_addr(addr) & 0x07FF] = value;
-    } else {
-        // Palette
-        write_palette(addr, value);
+    // Only evaluate if rendering is enabled
+    if (!(mask_ & 0x18)) {
+        return;
     }
-}
-
-std::uint16_t PPU::mirror_nametable_addr(std::uint16_t addr) {
-    addr &= 0x2FFF;  // Mirror $3000-$3EFF to $2000-$2EFF
     
-    Cartridge::MirrorMode mode = bus_.cartridge().mirror_mode();
+    int height = sprite_height();
+    int next_scanline = scanline_ + 1;
     
-    switch (mode) {
-        case Cartridge::MirrorMode::Horizontal:
-            // $2000/$2400 -> $2000, $2800/$2C00 -> $2400
-            if (addr >= 0x2800) {
-                return (addr - 0x2800) + 0x0400;
-            } else if (addr >= 0x2400) {
-                return addr - 0x2400;
+    // Evaluate all 64 sprites in OAM
+    for (int i = 0; i < 64; ++i) {
+        std::uint8_t sprite_y = oam_[i * 4 + 0];
+        
+        // Check if sprite is on next scanline
+        int diff = next_scanline - sprite_y;
+        if (diff >= 0 && diff < height) {
+            if (sprite_count_ < MAX_SPRITES_PER_SCANLINE) {
+                // Copy sprite to secondary OAM
+                secondary_oam_[sprite_count_].y = sprite_y;
+                secondary_oam_[sprite_count_].tile_index = oam_[i * 4 + 1];
+                secondary_oam_[sprite_count_].attributes = oam_[i * 4 + 2];
+                secondary_oam_[sprite_count_].x = oam_[i * 4 + 3];
+                secondary_oam_[sprite_count_].oam_index = static_cast<std::uint8_t>(i);
+                
+                // Track if this is sprite 0
+                if (i == 0) {
+                    sprite_zero_hit_possible_ = true;
+                }
+                
+                sprite_count_++;
+            } else {
+                // More than 8 sprites on this scanline - set overflow flag
+                status_ |= 0x20;
+                break;  // Stop evaluating
             }
-            return addr - 0x2000;
+        }
+    }
+}
+
+void PPU::fetch_sprite_patterns() {
+    int height = sprite_height();
+    int next_scanline = scanline_ + 1;
+    
+    for (int i = 0; i < sprite_count_; ++i) {
+        SpriteEntry& sprite = secondary_oam_[i];
+        
+        std::uint8_t sprite_pattern_lo = 0;
+        std::uint8_t sprite_pattern_hi = 0;
+        std::uint16_t pattern_addr = 0;
+        
+        // Calculate row within sprite
+        int row = next_scanline - sprite.y - 1;
+        
+        // Handle vertical flip
+        if (sprite.attributes & 0x80) {
+            row = (height - 1) - row;
+        }
+        
+        if (height == 8) {
+            // 8x8 sprites
+            std::uint16_t pattern_table = (ctrl_ & 0x08) ? 0x1000 : 0x0000;
+            pattern_addr = pattern_table | (sprite.tile_index << 4) | row;
+        } else {
+            // 8x16 sprites - tile index bit 0 selects pattern table
+            std::uint16_t pattern_table = (sprite.tile_index & 0x01) ? 0x1000 : 0x0000;
+            std::uint8_t tile = sprite.tile_index & 0xFE;
             
-        case Cartridge::MirrorMode::Vertical:
-            // $2000/$2800 -> $2000, $2400/$2C00 -> $2400
-            return (addr & 0x07FF);
+            if (row >= 8) {
+                tile++;       // Bottom tile
+                row -= 8;
+            }
             
-        case Cartridge::MirrorMode::SingleLower:
-            return addr & 0x03FF;
+            pattern_addr = pattern_table | (tile << 4) | row;
+        }
+        
+        // Fetch pattern data
+        sprite_pattern_lo = ppu_read(pattern_addr);
+        sprite_pattern_hi = ppu_read(pattern_addr + 8);
+        
+        // Handle horizontal flip
+        if (sprite.attributes & 0x40) {
+            // Flip bits in both bytes
+            auto flip_byte = [](std::uint8_t b) {
+                b = ((b & 0xF0) >> 4) | ((b & 0x0F) << 4);
+                b = ((b & 0xCC) >> 2) | ((b & 0x33) << 2);
+                b = ((b & 0xAA) >> 1) | ((b & 0x55) << 1);
+                return b;
+            };
+            sprite_pattern_lo = flip_byte(sprite_pattern_lo);
+            sprite_pattern_hi = flip_byte(sprite_pattern_hi);
+        }
+        
+        // Store in shift registers
+        sprite_shifter_pattern_lo_[i] = sprite_pattern_lo;
+        sprite_shifter_pattern_hi_[i] = sprite_pattern_hi;
+        sprite_x_counters_[i] = sprite.x;
+        sprite_attributes_[i] = sprite.attributes;
+        sprite_is_sprite0_[i] = (sprite.oam_index == 0);
+    }
+}
+
+void PPU::render_sprite_pixel(std::uint8_t& sprite_pixel, std::uint8_t& sprite_palette, 
+                               bool& sprite_priority, bool& is_sprite_zero) {
+    sprite_pixel = 0;
+    sprite_palette = 0;
+    sprite_priority = false;
+    is_sprite_zero = false;
+    
+    if (!(mask_ & 0x10)) {
+        return;  // Sprites disabled
+    }
+    
+    int x = cycle_ - 1;
+    
+    // Check left-8-pixel clip for sprites
+    if (x < 8 && !(mask_ & 0x04)) {
+        return;
+    }
+    
+    // Find first non-transparent sprite pixel
+    for (int i = 0; i < sprite_count_; ++i) {
+        // Check if this sprite's X counter has reached 0 (sprite is active)
+        int sprite_x = sprite_x_counters_[i];
+        int offset = x - sprite_x;
+        
+        if (offset >= 0 && offset < 8) {
+            // Get pixel from shift register
+            std::uint8_t bit = 7 - offset;
+            std::uint8_t pixel_lo = (sprite_shifter_pattern_lo_[i] >> bit) & 0x01;
+            std::uint8_t pixel_hi = (sprite_shifter_pattern_hi_[i] >> bit) & 0x01;
+            std::uint8_t pixel = (pixel_hi << 1) | pixel_lo;
             
-        case Cartridge::MirrorMode::SingleUpper:
-            return (addr & 0x03FF) + 0x0400;
-            
-        case Cartridge::MirrorMode::FourScreen:
-        default:
-            return addr & 0x0FFF;
+            if (pixel != 0) {
+                // Found a non-transparent pixel
+                sprite_pixel = pixel;
+                sprite_palette = (sprite_attributes_[i] & 0x03) + 4;  // Sprite palettes are 4-7
+                sprite_priority = (sprite_attributes_[i] & 0x20) != 0;  // Behind background
+                is_sprite_zero = sprite_is_sprite0_[i];
+                return;  // First sprite wins (lowest OAM index has priority)
+            }
+        }
     }
 }
 
@@ -231,7 +347,6 @@ void PPU::render_pixel() {
     
     // Get background pixel if rendering enabled
     if (mask_ & 0x08) {
-        // Check left-8-pixel clip
         if (x >= 8 || (mask_ & 0x02)) {
             std::uint16_t bit_mux = 0x8000 >> fine_x_;
             
@@ -245,10 +360,61 @@ void PPU::render_pixel() {
         }
     }
     
+    // Get sprite pixel
+    std::uint8_t sprite_pixel = 0;
+    std::uint8_t sprite_palette = 0;
+    bool sprite_priority = false;
+    bool is_sprite_zero = false;
+    
+    render_sprite_pixel(sprite_pixel, sprite_palette, sprite_priority, is_sprite_zero);
+    
+    // Determine final pixel
+    std::uint8_t final_pixel = 0;
+    std::uint8_t final_palette = 0;
+    
+    if (bg_pixel == 0 && sprite_pixel == 0) {
+        // Both transparent - use background color
+        final_pixel = 0;
+        final_palette = 0;
+    } else if (bg_pixel == 0 && sprite_pixel != 0) {
+        // Only sprite visible
+        final_pixel = sprite_pixel;
+        final_palette = sprite_palette;
+    } else if (bg_pixel != 0 && sprite_pixel == 0) {
+        // Only background visible
+        final_pixel = bg_pixel;
+        final_palette = bg_palette;
+    } else {
+        // Both visible - check priority
+        if (sprite_priority) {
+            // Sprite behind background
+            final_pixel = bg_pixel;
+            final_palette = bg_palette;
+        } else {
+            // Sprite in front of background
+            final_pixel = sprite_pixel;
+            final_palette = sprite_palette;
+        }
+        
+        // Sprite 0 hit detection
+        if (is_sprite_zero && sprite_zero_hit_possible_) {
+            // Sprite 0 hit occurs when both BG and sprite are opaque
+            // and both BG and sprite rendering are enabled
+            if ((mask_ & 0x18) == 0x18) {
+                // Don't trigger at x=255 or if left clipping affects it
+                if (x < 255) {
+                    if (x >= 8 || ((mask_ & 0x06) == 0x06)) {
+                        status_ |= 0x40;  // Set sprite 0 hit
+                    }
+                }
+            }
+        }
+    }
+    
     // Get color from palette
-    std::uint8_t palette_index = 0;
-    if (bg_pixel != 0) {
-        palette_index = (bg_palette << 2) | bg_pixel;
+    std::uint8_t palette_index = (final_palette << 2) | final_pixel;
+    if (final_pixel == 0) {
+        palette_index = 0;  // Transparent always uses palette index 0
     }
     
     std::uint8_t color_index = ppu_read(0x3F00 + palette_index) & 0x3F;
@@ -258,11 +424,9 @@ void PPU::render_pixel() {
 }
 
 void PPU::load_background_shifters() {
-    // Load next tile data into shift registers
     bg_shifter_pattern_lo_ = (bg_shifter_pattern_lo_ & 0xFF00) | bg_next_tile_lsb_;
     bg_shifter_pattern_hi_ = (bg_shifter_pattern_hi_ & 0xFF00) | bg_next_tile_msb_;
     
-    // Expand 2-bit palette to fill 8 bits
     bg_shifter_attrib_lo_ = (bg_shifter_attrib_lo_ & 0xFF00) | 
                             ((bg_next_tile_attrib_ & 0x01) ? 0xFF : 0x00);
     bg_shifter_attrib_hi_ = (bg_shifter_attrib_hi_ & 0xFF00) | 
@@ -270,7 +434,7 @@ void PPU::load_background_shifters() {
 }
 
 void PPU::update_shifters() {
-    if (mask_ & 0x08) {  // Background rendering enabled
+    if (mask_ & 0x08) {
         bg_shifter_pattern_lo_ <<= 1;
         bg_shifter_pattern_hi_ <<= 1;
         bg_shifter_attrib_lo_ <<= 1;
@@ -279,29 +443,26 @@ void PPU::update_shifters() {
 }
 
 void PPU::increment_scroll_x() {
-    // Increment coarse X, wrapping at 32 and toggling nametable
     if ((vram_addr_ & 0x001F) == 31) {
-        vram_addr_ &= ~0x001F;       // Clear coarse X
-        vram_addr_ ^= 0x0400;        // Toggle horizontal nametable
+        vram_addr_ &= ~0x001F;
+        vram_addr_ ^= 0x0400;
     } else {
         vram_addr_++;
     }
 }
 
 void PPU::increment_scroll_y() {
-    // Increment fine Y
     if ((vram_addr_ & 0x7000) != 0x7000) {
         vram_addr_ += 0x1000;
     } else {
-        vram_addr_ &= ~0x7000;  // Clear fine Y
+        vram_addr_ &= ~0x7000;
         
-        // Increment coarse Y
         int y = (vram_addr_ & 0x03E0) >> 5;
         if (y == 29) {
             y = 0;
-            vram_addr_ ^= 0x0800;  // Toggle vertical nametable
+            vram_addr_ ^= 0x0800;
         } else if (y == 31) {
-            y = 0;  // Don't toggle nametable (attribute table wrap)
+            y = 0;
         } else {
             y++;
         }
@@ -310,16 +471,12 @@ void PPU::increment_scroll_y() {
 }
 
 void PPU::transfer_address_x() {
-    // Copy horizontal bits from t to v
-    // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
     if (mask_ & 0x18) {
         vram_addr_ = (vram_addr_ & ~0x041F) | (temp_addr_ & 0x041F);
     }
 }
 
 void PPU::transfer_address_y() {
-    // Copy vertical bits from t to v
-    // v: GHIA.BC DEF..... <- t: GHIA.BC DEF.....
     if (mask_ & 0x18) {
         vram_addr_ = (vram_addr_ & ~0x7BE0) | (temp_addr_ & 0x7BE0);
     }
@@ -338,44 +495,87 @@ void PPU::clear_vblank() {
     nmi_occurred_ = false;
 }
 
+std::uint8_t PPU::ppu_read(std::uint16_t addr) {
+    addr &= 0x3FFF;
+    
+    if (addr < 0x2000) {
+        return bus_.cartridge().read_chr(addr);
+    } else if (addr < 0x3F00) {
+        return vram_[mirror_nametable_addr(addr) & 0x07FF];
+    } else {
+        return read_palette(addr);
+    }
+}
+
+void PPU::ppu_write(std::uint16_t addr, std::uint8_t value) {
+    addr &= 0x3FFF;
+    
+    if (addr < 0x2000) {
+        bus_.cartridge().write_chr(addr, value);
+    } else if (addr < 0x3F00) {
+        vram_[mirror_nametable_addr(addr) & 0x07FF] = value;
+    } else {
+        write_palette(addr, value);
+    }
+}
+
+std::uint16_t PPU::mirror_nametable_addr(std::uint16_t addr) {
+    addr &= 0x2FFF;
+    
+    Cartridge::MirrorMode mode = bus_.cartridge().mirror_mode();
+    
+    switch (mode) {
+        case Cartridge::MirrorMode::Horizontal:
+            if (addr >= 0x2800) {
+                return (addr - 0x2800) + 0x0400;
+            } else if (addr >= 0x2400) {
+                return addr - 0x2400;
+            }
+            return addr - 0x2000;
+            
+        case Cartridge::MirrorMode::Vertical:
+            return (addr & 0x07FF);
+            
+        case Cartridge::MirrorMode::SingleLower:
+            return addr & 0x03FF;
+            
+        case Cartridge::MirrorMode::SingleUpper:
+            return (addr & 0x03FF) + 0x0400;
+            
+        case Cartridge::MirrorMode::FourScreen:
+        default:
+            return addr & 0x0FFF;
+    }
+}
+
 std::uint8_t PPU::read(std::uint16_t addr) {
     std::uint8_t result = 0;
     
     switch (addr & 0x0007) {
-        case 0: // $2000 PPUCTRL - write only
+        case 0:
             break;
-            
-        case 1: // $2001 PPUMASK - write only
+        case 1:
             break;
-            
-        case 2: // $2002 PPUSTATUS
+        case 2:
             result = (status_ & 0xE0);
             status_ &= ~0x80;
             write_latch_ = false;
             break;
-            
-        case 3: // $2003 OAMADDR - write only
+        case 3:
             break;
-            
-        case 4: // $2004 OAMDATA
+        case 4:
             result = oam_[oam_addr_];
             break;
-            
-        case 5: // $2005 PPUSCROLL - write only
+        case 5:
             break;
-            
-        case 6: // $2006 PPUADDR - write only
+        case 6:
             break;
-            
-        case 7: // $2007 PPUDATA
+        case 7:
             result = vram_data_;
             vram_data_ = ppu_read(vram_addr_);
-            
-            // Palette reads are not delayed
             if ((vram_addr_ & 0x3FFF) >= 0x3F00) {
                 result = vram_data_;
             }
-            
             vram_addr_ += (ctrl_ & 0x04) ? 32 : 1;
             break;
     }
@@ -385,54 +585,42 @@ std::uint8_t PPU::read(std::uint16_t addr) {
 
 void PPU::write(std::uint16_t addr, std::uint8_t value) {
     switch (addr & 0x0007) {
-        case 0: // $2000 PPUCTRL
+        case 0:
             ctrl_ = value;
-            // t: ...GH.. ........ <- d: ......GH
             temp_addr_ = (temp_addr_ & 0xF3FF) | ((value & 0x03) << 10);
             break;
-            
-        case 1: // $2001 PPUMASK
+        case 1:
             mask_ = value;
             break;
-            
-        case 2: // $2002 PPUSTATUS - read only
+        case 2:
             break;
-            
-        case 3: // $2003 OAMADDR
+        case 3:
             oam_addr_ = value;
             break;
-            
-        case 4: // $2004 OAMDATA
+        case 4:
             oam_[oam_addr_++] = value;
             break;
-            
-        case 5: // $2005 PPUSCROLL
+        case 5:
             if (!write_latch_) {
-                // First write: X scroll
                 fine_x_ = value & 0x07;
                 temp_addr_ = (temp_addr_ & 0xFFE0) | (value >> 3);
             } else {
-                // Second write: Y scroll
                 temp_addr_ = (temp_addr_ & 0x8C1F) | 
                              ((value & 0x07) << 12) |
                              ((value & 0xF8) << 2);
             }
             write_latch_ = !write_latch_;
             break;
-            
-        case 6: // $2006 PPUADDR
+        case 6:
             if (!write_latch_) {
-                // First write: high byte
                 temp_addr_ = (temp_addr_ & 0x00FF) | ((value & 0x3F) << 8);
             } else {
-                // Second write: low byte
                 temp_addr_ = (temp_addr_ & 0xFF00) | value;
                 vram_addr_ = temp_addr_;
             }
             write_latch_ = !write_latch_;
             break;
-            
-        case 7: // $2007 PPUDATA
+        case 7:
             ppu_write(vram_addr_, value);
             vram_addr_ += (ctrl_ & 0x04) ? 32 : 1;
             break;
