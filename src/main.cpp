@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
+#include <fstream>
 
 // NES timing constants
 namespace NESConfig {
@@ -27,6 +28,12 @@ namespace NESConfig {
     constexpr int TARGET_FPS = 60;
     constexpr int FRAME_TIME_MS = 1000 / TARGET_FPS;
     constexpr int SAMPLES_PER_FRAME = SAMPLE_RATE / TARGET_FPS;  // ~735 samples
+}
+
+// Check if file exists
+bool file_exists(const std::string& filename) {
+    std::ifstream file(filename);
+    return file.good();
 }
 
 // Generate test tone when no ROM is loaded
@@ -62,17 +69,42 @@ int main(int argc, char** argv) {
     std::cout << "Starting nesemu...\n";
     std::cout << Input::get_default_mapping() << "\n\n";
     
-    // Load cartridge (ROM file optional for testing)
-    Cartridge cart(argc >= 2 ? argv[1] : "");
-    bool rom_loaded = (argc >= 2 && cart.loaded());
+    // Determine which ROM to load
+    std::string rom_path;
+    bool rom_loaded = false;
     
-    if (argc >= 2 && !cart.loaded()) {
-        std::cerr << "Warning: Failed to load ROM: " << argv[1] << '\n';
+    // Priority 1: Check command line argument
+    if (argc >= 2) {
+        rom_path = argv[1];
+        std::cout << "Loading ROM from command line: " << rom_path << "\n";
+    }
+    // Priority 2: Check for Super_Mario_Bros.nes in current directory
+    else if (file_exists("Super_Mario_Bros.nes")) {
+        rom_path = "Super_Mario_Bros.nes";
+        std::cout << "Found Super_Mario_Bros.nes in current directory.\n";
+    }
+    // Priority 3: No ROM found, use test mode
+    else {
+        std::cout << "No ROM found. Checked:\n";
+        std::cout << "  - Command line arguments\n";
+        std::cout << "  - Super_Mario_Bros.nes in current directory\n";
+        std::cout << "Using test tone and pattern...\n";
+    }
+    
+    // Load cartridge
+    Cartridge cart(rom_path);
+    rom_loaded = cart.loaded();
+    
+    if (!rom_path.empty() && !rom_loaded) {
+        std::cerr << "Warning: Failed to load ROM: " << rom_path << '\n';
         std::cerr << "Continuing with test pattern...\n";
     }
     
-    if (!rom_loaded) {
-        std::cout << "No ROM loaded - using test tone and pattern.\n";
+    if (rom_loaded) {
+        std::cout << "? ROM loaded successfully!\n";
+        std::cout << "  PRG ROM: " << (cart.prg_banks() * 16) << " KB\n";
+        std::cout << "  CHR ROM: " << (cart.chr_banks() * 8) << " KB\n";
+        std::cout << "  Mapper: " << static_cast<int>(cart.mapper_id()) << " (" << cart.mapper_name() << ")\n";
     }
 
     // Initialize emulation components
