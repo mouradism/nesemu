@@ -213,7 +213,7 @@ int CPU::step() {
     std::uint8_t op_cycles = (this->*inst.operate)();
     
     // Calculate total cycles
-    std::uint8_t total_cycles = inst.cycles + (addr_cycles & op_cycles);
+    std::uint8_t total_cycles = inst.cycles + (addr_cycles | op_cycles);
     
     // Always set unused flag
     set_flag(Flag::U, true);
