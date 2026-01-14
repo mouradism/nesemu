@@ -265,6 +265,11 @@ int main(int argc, char** argv) {
         // Debug output every second
         if (frame_counter % NESConfig::TARGET_FPS == 0) {
             std::cout << "Frame: " << frame_counter;
+            if (ppu.frame_ready()) {
+                std::cout << " | PPU ready: YES";
+            } else {
+                std::cout << " | PPU ready: NO";
+            }
             if (controller1.get_state() != 0) {
                 std::cout << " | P1: 0x" << std::hex << static_cast<int>(controller1.get_state()) << std::dec;
             }
