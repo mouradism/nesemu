@@ -87,6 +87,12 @@ void PPU::step() {
                 transfer_address_y();
             }
         }
+        
+        // Odd frame cycle skip - skip cycle 340 on pre-render scanline
+        // This effectively skips cycle 0 of the next frame
+        if (cycle_ == 339 && odd_frame_ && (mask_ & 0x18)) {
+            cycle_ = 340;  // Will become 341, then wrap to 0
+        }
     }
     
     // Visible scanlines (0-239) and pre-render scanline
@@ -155,6 +161,12 @@ void PPU::step() {
         if (cycle_ == 321 && scanline_ < 240) {
             fetch_sprite_patterns();
         }
+        
+        // Unused nametable fetches at cycles 337-340
+        // These are dummy fetches that some games rely on for timing
+        if (cycle_ == 337 || cycle_ == 339) {
+            bg_next_tile_id_ = ppu_read(0x2000 | (vram_addr_ & 0x0FFF));
+        }
     }
     
     // Visible scanlines: render pixels
@@ -199,13 +211,15 @@ void PPU::evaluate_sprites() {
     int height = sprite_height();
     int next_scanline = scanline_ + 1;
     
-    // Evaluate all 64 sprites in OAM
+    // Evaluate all 64 sprites in OAM for the NEXT scanline
+    // NES sprite Y value: sprite appears on scanlines (Y+1) through (Y+height)
     for (int i = 0; i < 64; ++i) {
         std::uint8_t sprite_y = oam_[i * 4 + 0];
         
         // Check if sprite is on next scanline
-        int diff = next_scanline - sprite_y;
-        if (diff >= 0 && diff < height) {
+        // diff should be 1..height for the sprite to be visible
+        int diff = next_scanline - static_cast<int>(sprite_y);
+        if (diff > 0 && diff <= height) {
             if (sprite_count_ < MAX_SPRITES_PER_SCANLINE) {
                 // Copy sprite to secondary OAM
                 secondary_oam_[sprite_count_].y = sprite_y;
@@ -240,8 +254,9 @@ void PPU::fetch_sprite_patterns() {
         std::uint8_t sprite_pattern_hi = 0;
         std::uint16_t pattern_addr = 0;
         
-        // Calculate row within sprite
-        int row = next_scanline - sprite.y - 1;
+        // Calculate row within sprite for NEXT scanline
+        // Sprite appears at (sprite.y + 1), so row = next_scanline - (sprite.y + 1)
+        int row = next_scanline - static_cast<int>(sprite.y) - 1;
         
         // Handle vertical flip
         if (sprite.attributes & 0x80) {
