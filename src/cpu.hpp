@@ -56,6 +56,14 @@ public:
     std::uint8_t get_status() const { return status_; }
     std::uint64_t get_cycles() const { return cycles_; }
     
+    // Debug info for current instruction
+    std::uint8_t get_opcode() const { return opcode_; }
+    const char* get_instruction_name() const { 
+        return INSTRUCTION_TABLE[opcode_].name; 
+    }
+    std::uint16_t get_addr_abs() const { return addr_abs_; }
+    std::uint8_t get_fetched() const { return fetched_; }
+
     // State mutators (for testing)
     void set_a(std::uint8_t v) { a_ = v; }
     void set_x(std::uint8_t v) { x_ = v; }

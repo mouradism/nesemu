@@ -185,6 +185,16 @@ int main(int argc, char** argv) {
             } else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
                 video.quit();
                 break;
+            } else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F1) {
+                // Toggle debug window
+                if (video.get_imgui_manager()) {
+                    video.get_imgui_manager()->toggle_debug_window();
+                }
+            }
+            
+            // Process ImGui events (for mouse/keyboard interaction with UI)
+            if (video.get_imgui_manager()) {
+                video.get_imgui_manager()->process_event(event);
             }
             
             // Process controller input events

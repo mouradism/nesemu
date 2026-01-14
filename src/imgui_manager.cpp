@@ -140,74 +140,87 @@ void ImGuiManager::draw_cpu_state() {
     ImGui::Text("=== CPU State ===");
     ImGui::Separator();
     
-    // Registers display (without columns to avoid tab issues)
-    ImGui::BeginGroup();
-    ImGui::Text("Accumulator (A): 0x%02X (%3d)", cpu_->get_a(), cpu_->get_a());
-    ImGui::Text("X Register:     0x%02X (%3d)", cpu_->get_x(), cpu_->get_x());
-    ImGui::Text("Y Register:     0x%02X (%3d)", cpu_->get_y(), cpu_->get_y());
-    ImGui::Text("Stack Pointer:  0x%02X (0x01%02X)", cpu_->get_sp(), cpu_->get_sp());
-    ImGui::Text("Program Counter: 0x%04X", cpu_->get_pc());
-    ImGui::Text("Cycles:          %llu", cpu_->get_cycles());
-    ImGui::EndGroup();
+    // Current instruction being executed
+    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Current Instruction:");
+    ImGui::Text("  Opcode:   0x%02X", cpu_->get_opcode());
+    ImGui::Text("  Mnemonic: %s", cpu_->get_instruction_name());
+    ImGui::Text("  Address:  0x%04X", cpu_->get_addr_abs());
+    ImGui::Text("  Fetched:  0x%02X", cpu_->get_fetched());
+    
+    ImGui::Separator();
+    
+    // Registers display
+    ImGui::TextColored(ImVec4(0, 1, 1, 1), "Registers:");
+    ImGui::Text("  Accumulator (A):  0x%02X (%3d)", cpu_->get_a(), cpu_->get_a());
+    ImGui::Text("  X Register:       0x%02X (%3d)", cpu_->get_x(), cpu_->get_x());
+    ImGui::Text("  Y Register:       0x%02X (%3d)", cpu_->get_y(), cpu_->get_y());
+    ImGui::Text("  Stack Pointer:    0x%02X (0x01%02X)", cpu_->get_sp(), cpu_->get_sp());
+    ImGui::Text("  Program Counter:  0x%04X", cpu_->get_pc());
+    ImGui::Text("  Total Cycles:     %llu", cpu_->get_cycles());
+    
+    ImGui::Separator();
+    
+    // CPU Usage metrics
+    ImGui::TextColored(ImVec4(0, 1, 1, 1), "CPU Performance:");
+    
+    // Calculate cycles per second (approx) - persistent state
+    static std::uint64_t last_cycles = 0;
+    static float last_time = 0.0f;
+    static float cached_mhz = 0.0f;
+    static float cached_instr_per_sec = 0.0f;
+    
+    float current_time = ImGui::GetTime();
+    
+    if (current_time - last_time >= 1.0f) {
+        std::uint64_t current_cycles = cpu_->get_cycles();
+        float cycles_per_second = static_cast<float>(current_cycles - last_cycles);
+        cached_mhz = cycles_per_second / 1000000.0f;
+        cached_instr_per_sec = cycles_per_second / 3.0f;  // ~3 cycles per instruction average
+        
+        last_cycles = current_cycles;
+        last_time = current_time;
+    }
+    
+    ImGui::Text("  Cycles/sec:       %.2f MHz", cached_mhz);
+    ImGui::Text("  Instructions/sec: ~%.0fk", cached_instr_per_sec / 1000.0f);
     
     ImGui::Separator();
     
     // Flags display
-    ImGui::Text("Status Flags: 0x%02X", cpu_->get_status());
-    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0, 1, 1, 1), "Status Flags: 0x%02X", cpu_->get_status());
     
-    // Flag breakdown with colored indicators
-    ImGui::BeginGroup();
-    
-    // Row 1
+    // Each flag on its own line with colored indicator
     ImGui::TextColored(
         cpu_->get_flag(Flag::C) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "C: %d Carry", cpu_->get_flag(Flag::C)
+        "  C: %d  Carry", cpu_->get_flag(Flag::C)
     );
-    ImGui::SameLine(100);
     ImGui::TextColored(
         cpu_->get_flag(Flag::Z) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "Z: %d Zero", cpu_->get_flag(Flag::Z)
+        "  Z: %d  Zero", cpu_->get_flag(Flag::Z)
     );
-    ImGui::SameLine(200);
     ImGui::TextColored(
         cpu_->get_flag(Flag::I) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "I: %d Interrupt", cpu_->get_flag(Flag::I)
+        "  I: %d  Interrupt Disable", cpu_->get_flag(Flag::I)
     );
-    ImGui::SameLine(340);
     ImGui::TextColored(
         cpu_->get_flag(Flag::D) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "D: %d Decimal", cpu_->get_flag(Flag::D)
+        "  D: %d  Decimal", cpu_->get_flag(Flag::D)
     );
-    
-    // Row 2
     ImGui::TextColored(
         cpu_->get_flag(Flag::B) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "B: %d Break", cpu_->get_flag(Flag::B)
+        "  B: %d  Break", cpu_->get_flag(Flag::B)
     );
-    ImGui::SameLine(100);
-    ImGui::TextColored(
-        cpu_->get_flag(Flag::V) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "V: %d Overflow", cpu_->get_flag(Flag::V)
-    );
-    ImGui::SameLine(200);
-    ImGui::TextColored(
-        cpu_->get_flag(Flag::N) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "N: %d Negative", cpu_->get_flag(Flag::N)
-    );
-    ImGui::SameLine(340);
     ImGui::TextColored(
         cpu_->get_flag(Flag::U) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "U: %d Unused", cpu_->get_flag(Flag::U)
+        "  U: %d  Unused (always 1)", cpu_->get_flag(Flag::U)
     );
-    
-    ImGui::EndGroup();
-    ImGui::Separator();
-    
-    // Flag explanations
-    ImGui::TextWrapped(
-        "Flags: C=Carry, Z=Zero, I=InterruptDisable, D=Decimal, "
-        "B=Break, V=Overflow, N=Negative, U=Unused"
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::V) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "  V: %d  Overflow", cpu_->get_flag(Flag::V)
+    );
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::N) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "  N: %d  Negative", cpu_->get_flag(Flag::N)
     );
 }
 
