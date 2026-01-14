@@ -5,6 +5,8 @@
 #include "apu.hpp"
 #include "memory.hpp"
 #include "cartridge.hpp"
+#include "controller.hpp"
+#include "input.hpp"
 #include "video.hpp"
 #include "audio.hpp"
 
@@ -58,6 +60,7 @@ void generate_test_pattern(std::vector<std::uint32_t>& framebuffer, std::uint64_
 
 int main(int argc, char** argv) {
     std::cout << "Starting nesemu...\n";
+    std::cout << Input::get_default_mapping() << "\n\n";
     
     // Load cartridge (ROM file optional for testing)
     Cartridge cart(argc >= 2 ? argv[1] : "");
@@ -77,6 +80,19 @@ int main(int argc, char** argv) {
     CPU cpu(bus);
     PPU ppu(bus);
     APU apu;
+    
+    // Initialize controllers
+    Controller controller1;
+    Controller controller2;
+    
+    // Wire controllers to memory bus
+    bus.set_ppu(&ppu);
+    bus.set_apu(&apu);
+    bus.set_controllers(&controller1, &controller2);
+    
+    // Initialize input handler
+    Input input;
+    input.set_controllers(&controller1, &controller2);
 
     // Initialize SDL library
     std::cout << "Initializing SDL...\n";
@@ -106,6 +122,8 @@ int main(int argc, char** argv) {
     cpu.reset();
     ppu.reset();
     apu.reset();
+    controller1.reset();
+    controller2.reset();
 
     std::uint64_t frame_counter = 0;
     Uint32 frame_start_time = 0;
@@ -120,8 +138,25 @@ int main(int argc, char** argv) {
     while (video.is_running()) {
         frame_start_time = SDL_GetTicks();
 
-        // Process window events
-        if (!video.handle_events()) {
+        // Process window events and input
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                video.quit();
+                break;
+            } else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+                video.quit();
+                break;
+            }
+            
+            // Process controller input events
+            input.process_event(event);
+        }
+        
+        // Also update from keyboard state (for held keys)
+        input.update_from_keyboard_state();
+        
+        if (!video.is_running()) {
             break;
         }
 
@@ -147,6 +182,13 @@ int main(int argc, char** argv) {
                 // TODO: Trigger NMI on CPU when CPU supports it
                 // cpu.trigger_nmi();
             }
+            
+            // Handle OAM DMA
+            if (bus.dma_pending()) {
+                bus.execute_dma();
+                // DMA takes 513-514 CPU cycles
+                cycles_this_frame += 514;
+            }
         }
 
         // Queue audio samples
@@ -170,8 +212,8 @@ int main(int argc, char** argv) {
             // Use real PPU output
             framebuffer = ppu.get_framebuffer();
             ppu.clear_frame_ready();
-        } else {
-            // Use test pattern when no ROM loaded and PPU not ready
+        } else if (!rom_loaded) {
+            // Use test pattern when no ROM loaded
             generate_test_pattern(framebuffer, frame_counter);
         }
 
@@ -187,7 +229,11 @@ int main(int argc, char** argv) {
 
         // Debug output every second
         if (frame_counter % NESConfig::TARGET_FPS == 0) {
-            std::cout << "Frame: " << frame_counter << "\n";
+            std::cout << "Frame: " << frame_counter;
+            if (controller1.get_state() != 0) {
+                std::cout << " | P1: 0x" << std::hex << static_cast<int>(controller1.get_state()) << std::dec;
+            }
+            std::cout << "\n";
         }
     }
 

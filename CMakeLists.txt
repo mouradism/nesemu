@@ -85,7 +85,6 @@ set(gtest_force_shared_crt ON CACHE BOOL "Use shared C runtime" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # Enable testing
-enable_testing()
 
 # APU Unit Tests
 add_executable(apu_test
@@ -102,6 +101,7 @@ add_test(NAME APUTests COMMAND apu_test)
 add_executable(ppu_test
     src/ppu.cpp
     src/memory.cpp
+    src/apu.cpp
     src/cartridge.cpp
     src/mapper.cpp
     tests/ppu_test.cpp
@@ -134,3 +134,28 @@ target_include_directories(mapper_test PRIVATE src)
 target_link_libraries(mapper_test PRIVATE gtest gtest_main)
 
 add_test(NAME MapperTests COMMAND mapper_test)
+
+# Memory Unit Tests
+add_executable(memory_test
+    src/memory.cpp
+    src/ppu.cpp
+    src/apu.cpp
+    src/cartridge.cpp
+    src/mapper.cpp
+    tests/memory_test.cpp
+)
+
+target_include_directories(memory_test PRIVATE src)
+target_link_libraries(memory_test PRIVATE gtest gtest_main)
+
+add_test(NAME MemoryTests COMMAND memory_test)
+
+# Controller Unit Tests
+add_executable(controller_test
+    tests/controller_test.cpp
+)
+
+target_include_directories(controller_test PRIVATE src)
+target_link_libraries(controller_test PRIVATE gtest gtest_main)
+
+add_test(NAME ControllerTests COMMAND controller_test)
