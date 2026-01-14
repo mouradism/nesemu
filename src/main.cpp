@@ -211,8 +211,7 @@ int main(int argc, char** argv) {
             // Handle NMI from PPU
             if (ppu.nmi_occurred()) {
                 ppu.clear_nmi();
-                // TODO: Trigger NMI on CPU when CPU supports it
-                // cpu.trigger_nmi();
+                cpu.nmi();  // Trigger NMI on CPU
             }
             
             // Handle OAM DMA
