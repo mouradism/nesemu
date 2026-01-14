@@ -32,43 +32,64 @@ if(NOT SDL2_FOUND)
   set(SDL_TEST OFF CACHE BOOL "" FORCE)
   
   FetchContent_MakeAvailable(SDL2)
-  
-  add_executable(nesemu
-      src/main.cpp
-      src/cpu.cpp
-      src/ppu.cpp
-      src/apu.cpp
-      src/memory.cpp
-      src/cartridge.cpp
-      src/mapper.cpp
-      src/video.cpp
-      src/audio.cpp
-  )
-  
-  target_include_directories(nesemu PRIVATE src)
-  target_link_libraries(nesemu PRIVATE SDL2::SDL2)
-  
+endif()
+
+# Find OpenGL early
+find_package(OpenGL REQUIRED)
+
+# Fetch ImGui AFTER SDL2 is available
+include(FetchContent)
+FetchContent_Declare(
+  imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG v1.89.9
+  GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(imgui)
+
+# Create ImGui library
+add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+)
+
+target_include_directories(imgui PUBLIC
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
+)
+
+target_link_libraries(imgui PUBLIC SDL2::SDL2 OpenGL::GL)
+
+# Main executable
+add_executable(nesemu
+    src/main.cpp
+    src/cpu.cpp
+    src/ppu.cpp
+    src/apu.cpp
+    src/memory.cpp
+    src/cartridge.cpp
+    src/mapper.cpp
+    src/video.cpp
+    src/audio.cpp
+    src/imgui_manager.cpp
+)
+
+target_include_directories(nesemu PRIVATE src)
+target_link_libraries(nesemu PRIVATE SDL2::SDL2 imgui OpenGL::GL)
+
+if(NOT SDL2_FOUND)
   # Copy SDL2 DLL to output directory
   add_custom_command(TARGET nesemu POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     $<TARGET_FILE:SDL2::SDL2>
     $<TARGET_FILE_DIR:nesemu>
   )
-else()
-  add_executable(nesemu
-      src/main.cpp
-      src/cpu.cpp
-      src/ppu.cpp
-      src/apu.cpp
-      src/memory.cpp
-      src/cartridge.cpp
-      src/mapper.cpp
-      src/video.cpp
-      src/audio.cpp
-  )
-  
-  target_include_directories(nesemu PRIVATE src)
-  target_link_libraries(nesemu PRIVATE SDL2::SDL2 SDL2::SDL2main)
 endif()
 
 # GTest configuration
@@ -84,7 +105,7 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "Use shared C runtime" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# Enable testing
+enable_testing()
 
 # APU Unit Tests
 add_executable(apu_test

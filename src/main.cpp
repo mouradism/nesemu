@@ -9,6 +9,7 @@
 #include "input.hpp"
 #include "video.hpp"
 #include "audio.hpp"
+#include "imgui_manager.hpp"
 
 #include <SDL.h>
 
@@ -145,6 +146,11 @@ int main(int argc, char** argv) {
     Audio audio;
     if (!audio.init(NESConfig::SAMPLE_RATE, 1)) {
         std::cerr << "Warning: Audio initialization failed, continuing without audio.\n";
+    }
+
+    // Set emulator references in ImGui manager (after audio is initialized)
+    if (video.get_imgui_manager()) {
+        video.get_imgui_manager()->set_emulator_refs(&cpu, &ppu, &apu, &audio, &controller1, &controller2);
     }
 
     // Allocate framebuffer for NES resolution
