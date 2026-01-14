@@ -29,6 +29,7 @@ private:
     float volume_;
     bool paused_;
     
-    static constexpr std::uint32_t MIN_BUFFER_SIZE = 2048;  // Minimum samples to avoid underrun
-    static constexpr std::uint32_t MAX_BUFFER_SIZE = 8192;  // Maximum samples to avoid latency
+    // Buffer sizes tuned for low latency (~23ms at 44100Hz)
+    static constexpr std::uint32_t MIN_BUFFER_SIZE = 512;   // ~12ms - minimum to avoid underrun
+    static constexpr std::uint32_t MAX_BUFFER_SIZE = 2048;  // ~46ms - maximum to avoid latency
 };

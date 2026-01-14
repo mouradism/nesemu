@@ -23,7 +23,7 @@ bool Audio::init(int sample_rate, int channels) {
     desired.freq = sample_rate;
     desired.format = AUDIO_F32SYS;
     desired.channels = static_cast<Uint8>(channels);
-    desired.samples = 1024;  // Buffer size in samples
+    desired.samples = 512;  // Reduced buffer size for lower latency (~12ms at 44100Hz)
 
     device_id_ = SDL_OpenAudioDevice(nullptr, 0, &desired, &obtained, 0);
     if (device_id_ == 0) {
@@ -45,6 +45,13 @@ bool Audio::init(int sample_rate, int channels) {
 
 void Audio::queue_samples(const std::vector<float>& samples) {
     if (device_id_ == 0 || samples.empty()) {
+        return;
+    }
+    
+    // Check if buffer is getting too full - skip samples to reduce latency
+    std::uint32_t queued = get_queued_size();
+    if (queued > MAX_BUFFER_SIZE) {
+        // Buffer is backing up, skip these samples to catch up
         return;
     }
     
