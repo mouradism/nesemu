@@ -138,22 +138,120 @@ void ImGuiManager::draw_cpu_state() {
     }
 
     ImGui::Text("=== CPU State ===");
-    ImGui::Text("A:  0x%02X", cpu_->get_a());
-    ImGui::Text("X:  0x%02X", cpu_->get_x());
-    ImGui::Text("Y:  0x%02X", cpu_->get_y());
-    ImGui::Text("SP: 0x%02X", cpu_->get_sp());
-    ImGui::Text("PC: 0x%04X", cpu_->get_pc());
-    ImGui::Text("Status: 0x%02X", cpu_->get_status());
-    ImGui::Text("Cycles: %llu", cpu_->get_cycles());
-
-    // Flag display
     ImGui::Separator();
-    ImGui::Text("Flags:");
-    ImGui::Text("  C: %d  Z: %d  I: %d  D: %d", 
-        cpu_->get_flag(Flag::C), cpu_->get_flag(Flag::Z),
-        cpu_->get_flag(Flag::I), cpu_->get_flag(Flag::D));
-    ImGui::Text("  V: %d  N: %d",
-        cpu_->get_flag(Flag::V), cpu_->get_flag(Flag::N));
+    
+    // Registers in a nice grid
+    ImGui::Columns(2, "cpu_registers", false);
+    ImGui::SetColumnWidth(0, 150);
+    
+    ImGui::Text("Accumulator (A):");
+    ImGui::NextColumn();
+    ImGui::Text("0x%02X (%3d)", cpu_->get_a(), cpu_->get_a());
+    ImGui::NextColumn();
+    
+    ImGui::Text("X Register:");
+    ImGui::NextColumn();
+    ImGui::Text("0x%02X (%3d)", cpu_->get_x(), cpu_->get_x());
+    ImGui::NextColumn();
+    
+    ImGui::Text("Y Register:");
+    ImGui::NextColumn();
+    ImGui::Text("0x%02X (%3d)", cpu_->get_y(), cpu_->get_y());
+    ImGui::NextColumn();
+    
+    ImGui::Text("Stack Pointer:");
+    ImGui::NextColumn();
+    ImGui::Text("0x%02X (0x01%02X)", cpu_->get_sp(), cpu_->get_sp());
+    ImGui::NextColumn();
+    
+    ImGui::Text("Program Counter:");
+    ImGui::NextColumn();
+    ImGui::Text("0x%04X", cpu_->get_pc());
+    ImGui::NextColumn();
+    
+    ImGui::Text("Cycles:");
+    ImGui::NextColumn();
+    ImGui::Text("%llu", cpu_->get_cycles());
+    ImGui::NextColumn();
+    
+    ImGui::Columns(1);
+    ImGui::Separator();
+    
+    // Flags display
+    ImGui::Text("Status Flags: 0x%02X", cpu_->get_status());
+    ImGui::Separator();
+    
+    // Flag breakdown with colored indicators
+    ImGui::Columns(4, "cpu_flags", false);
+    ImGui::SetColumnWidth(0, 80);
+    ImGui::SetColumnWidth(1, 80);
+    ImGui::SetColumnWidth(2, 80);
+    ImGui::SetColumnWidth(3, 80);
+    
+    // Carry Flag
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::C) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "C: %d", cpu_->get_flag(Flag::C)
+    );
+    ImGui::NextColumn();
+    
+    // Zero Flag
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::Z) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "Z: %d", cpu_->get_flag(Flag::Z)
+    );
+    ImGui::NextColumn();
+    
+    // Interrupt Disable
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::I) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "I: %d", cpu_->get_flag(Flag::I)
+    );
+    ImGui::NextColumn();
+    
+    // Decimal Mode
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::D) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "D: %d", cpu_->get_flag(Flag::D)
+    );
+    ImGui::NextColumn();
+    
+    // Break Flag
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::B) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "B: %d", cpu_->get_flag(Flag::B)
+    );
+    ImGui::NextColumn();
+    
+    // Overflow Flag
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::V) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "V: %d", cpu_->get_flag(Flag::V)
+    );
+    ImGui::NextColumn();
+    
+    // Negative Flag
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::N) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "N: %d", cpu_->get_flag(Flag::N)
+    );
+    ImGui::NextColumn();
+    
+    // Unused Flag
+    ImGui::TextColored(
+        cpu_->get_flag(Flag::U) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
+        "U: %d", cpu_->get_flag(Flag::U)
+    );
+    ImGui::NextColumn();
+    
+    ImGui::Columns(1);
+    ImGui::Separator();
+    
+    // Flag explanations
+    ImGui::TextWrapped(
+        "Flags: C=Carry, Z=Zero, I=InterruptDisable, D=Decimal, "
+        "B=Break, V=Overflow, N=Negative, U=Unused"
+    );
 }
 
 void ImGuiManager::draw_ppu_state() {
