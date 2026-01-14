@@ -159,3 +159,19 @@ target_include_directories(controller_test PRIVATE src)
 target_link_libraries(controller_test PRIVATE gtest gtest_main)
 
 add_test(NAME ControllerTests COMMAND controller_test)
+
+# CPU Unit Tests
+add_executable(cpu_test
+    src/cpu.cpp
+    src/memory.cpp
+    src/ppu.cpp
+    src/apu.cpp
+    src/cartridge.cpp
+    src/mapper.cpp
+    tests/cpu_test.cpp
+)
+
+target_include_directories(cpu_test PRIVATE src)
+target_link_libraries(cpu_test PRIVATE gtest gtest_main)
+
+add_test(NAME CPUTests COMMAND cpu_test)
