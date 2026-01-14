@@ -140,41 +140,16 @@ void ImGuiManager::draw_cpu_state() {
     ImGui::Text("=== CPU State ===");
     ImGui::Separator();
     
-    // Registers in a nice grid
-    ImGui::Columns(2, "cpu_registers", false);
-    ImGui::SetColumnWidth(0, 150);
+    // Registers display (without columns to avoid tab issues)
+    ImGui::BeginGroup();
+    ImGui::Text("Accumulator (A): 0x%02X (%3d)", cpu_->get_a(), cpu_->get_a());
+    ImGui::Text("X Register:     0x%02X (%3d)", cpu_->get_x(), cpu_->get_x());
+    ImGui::Text("Y Register:     0x%02X (%3d)", cpu_->get_y(), cpu_->get_y());
+    ImGui::Text("Stack Pointer:  0x%02X (0x01%02X)", cpu_->get_sp(), cpu_->get_sp());
+    ImGui::Text("Program Counter: 0x%04X", cpu_->get_pc());
+    ImGui::Text("Cycles:          %llu", cpu_->get_cycles());
+    ImGui::EndGroup();
     
-    ImGui::Text("Accumulator (A):");
-    ImGui::NextColumn();
-    ImGui::Text("0x%02X (%3d)", cpu_->get_a(), cpu_->get_a());
-    ImGui::NextColumn();
-    
-    ImGui::Text("X Register:");
-    ImGui::NextColumn();
-    ImGui::Text("0x%02X (%3d)", cpu_->get_x(), cpu_->get_x());
-    ImGui::NextColumn();
-    
-    ImGui::Text("Y Register:");
-    ImGui::NextColumn();
-    ImGui::Text("0x%02X (%3d)", cpu_->get_y(), cpu_->get_y());
-    ImGui::NextColumn();
-    
-    ImGui::Text("Stack Pointer:");
-    ImGui::NextColumn();
-    ImGui::Text("0x%02X (0x01%02X)", cpu_->get_sp(), cpu_->get_sp());
-    ImGui::NextColumn();
-    
-    ImGui::Text("Program Counter:");
-    ImGui::NextColumn();
-    ImGui::Text("0x%04X", cpu_->get_pc());
-    ImGui::NextColumn();
-    
-    ImGui::Text("Cycles:");
-    ImGui::NextColumn();
-    ImGui::Text("%llu", cpu_->get_cycles());
-    ImGui::NextColumn();
-    
-    ImGui::Columns(1);
     ImGui::Separator();
     
     // Flags display
@@ -182,69 +157,51 @@ void ImGuiManager::draw_cpu_state() {
     ImGui::Separator();
     
     // Flag breakdown with colored indicators
-    ImGui::Columns(4, "cpu_flags", false);
-    ImGui::SetColumnWidth(0, 80);
-    ImGui::SetColumnWidth(1, 80);
-    ImGui::SetColumnWidth(2, 80);
-    ImGui::SetColumnWidth(3, 80);
+    ImGui::BeginGroup();
     
-    // Carry Flag
+    // Row 1
     ImGui::TextColored(
         cpu_->get_flag(Flag::C) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "C: %d", cpu_->get_flag(Flag::C)
+        "C: %d Carry", cpu_->get_flag(Flag::C)
     );
-    ImGui::NextColumn();
-    
-    // Zero Flag
+    ImGui::SameLine(100);
     ImGui::TextColored(
         cpu_->get_flag(Flag::Z) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "Z: %d", cpu_->get_flag(Flag::Z)
+        "Z: %d Zero", cpu_->get_flag(Flag::Z)
     );
-    ImGui::NextColumn();
-    
-    // Interrupt Disable
+    ImGui::SameLine(200);
     ImGui::TextColored(
         cpu_->get_flag(Flag::I) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "I: %d", cpu_->get_flag(Flag::I)
+        "I: %d Interrupt", cpu_->get_flag(Flag::I)
     );
-    ImGui::NextColumn();
-    
-    // Decimal Mode
+    ImGui::SameLine(340);
     ImGui::TextColored(
         cpu_->get_flag(Flag::D) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "D: %d", cpu_->get_flag(Flag::D)
+        "D: %d Decimal", cpu_->get_flag(Flag::D)
     );
-    ImGui::NextColumn();
     
-    // Break Flag
+    // Row 2
     ImGui::TextColored(
         cpu_->get_flag(Flag::B) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "B: %d", cpu_->get_flag(Flag::B)
+        "B: %d Break", cpu_->get_flag(Flag::B)
     );
-    ImGui::NextColumn();
-    
-    // Overflow Flag
+    ImGui::SameLine(100);
     ImGui::TextColored(
         cpu_->get_flag(Flag::V) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "V: %d", cpu_->get_flag(Flag::V)
+        "V: %d Overflow", cpu_->get_flag(Flag::V)
     );
-    ImGui::NextColumn();
-    
-    // Negative Flag
+    ImGui::SameLine(200);
     ImGui::TextColored(
         cpu_->get_flag(Flag::N) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "N: %d", cpu_->get_flag(Flag::N)
+        "N: %d Negative", cpu_->get_flag(Flag::N)
     );
-    ImGui::NextColumn();
-    
-    // Unused Flag
+    ImGui::SameLine(340);
     ImGui::TextColored(
         cpu_->get_flag(Flag::U) ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-        "U: %d", cpu_->get_flag(Flag::U)
+        "U: %d Unused", cpu_->get_flag(Flag::U)
     );
-    ImGui::NextColumn();
     
-    ImGui::Columns(1);
+    ImGui::EndGroup();
     ImGui::Separator();
     
     // Flag explanations
