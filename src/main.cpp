@@ -240,11 +240,14 @@ int main(int argc, char** argv) {
 
         // Update framebuffer
         ++frame_counter;
-        if (rom_loaded && ppu.frame_ready()) {
-            // Use real PPU output
+        if (rom_loaded) {
+            // Use real PPU output when ROM is loaded
+            // PPU may not have frame_ready flag working, so render every frame
             framebuffer = ppu.get_framebuffer();
-            ppu.clear_frame_ready();
-        } else if (!rom_loaded) {
+            if (ppu.frame_ready()) {
+                ppu.clear_frame_ready();
+            }
+        } else {
             // Use test pattern when no ROM loaded
             generate_test_pattern(framebuffer, frame_counter);
         }
