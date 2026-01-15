@@ -6,7 +6,10 @@ Audio::Audio()
     : device_id_(0),
       sample_rate_(44100),
       volume_(1.0f),
-      paused_(false) {}
+      paused_(false) {
+    // Pre-allocate volume adjustment buffer
+    adjusted_buffer_.reserve(2048);
+}
 
 Audio::~Audio() {
     if (device_id_ != 0) {
@@ -55,15 +58,18 @@ void Audio::queue_samples(const std::vector<float>& samples) {
         return;
     }
     
-    // Apply volume if not at full
-    if (volume_ < 0.99f) {
-        std::vector<float> adjusted(samples.size());
-        for (size_t i = 0; i < samples.size(); ++i) {
-            adjusted[i] = samples[i] * volume_;
-        }
-        SDL_QueueAudio(device_id_, adjusted.data(), static_cast<Uint32>(adjusted.size() * sizeof(float)));
+    // Fast path: if volume is ~1.0, queue directly without copy
+    if (volume_ >= 0.99f) {
+        SDL_QueueAudio(device_id_, samples.data(), 
+                       static_cast<Uint32>(samples.size() * sizeof(float)));
     } else {
-        SDL_QueueAudio(device_id_, samples.data(), static_cast<Uint32>(samples.size() * sizeof(float)));
+        // Apply volume - reuse pre-allocated buffer to avoid allocation
+        adjusted_buffer_.resize(samples.size());
+        for (size_t i = 0; i < samples.size(); ++i) {
+            adjusted_buffer_[i] = samples[i] * volume_;
+        }
+        SDL_QueueAudio(device_id_, adjusted_buffer_.data(), 
+                       static_cast<Uint32>(adjusted_buffer_.size() * sizeof(float)));
     }
 }
 

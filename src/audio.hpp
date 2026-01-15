@@ -29,6 +29,9 @@ private:
     float volume_;
     bool paused_;
     
+    // Pre-allocated buffer for volume adjustment (avoids per-frame allocation)
+    std::vector<float> adjusted_buffer_;
+    
     // Buffer sizes tuned for low latency (~23ms at 44100Hz)
     static constexpr std::uint32_t MIN_BUFFER_SIZE = 512;   // ~12ms - minimum to avoid underrun
     static constexpr std::uint32_t MAX_BUFFER_SIZE = 2048;  // ~46ms - maximum to avoid latency

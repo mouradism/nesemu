@@ -541,35 +541,39 @@ void APU::update_noise_output() {
 }
 
 void APU::mix_audio() {
-    // NES-accurate nonlinear mixing
-    // Based on the actual NES mixer curves
+    // NES-accurate nonlinear mixing using precomputed lookup approach
+    // Optimized to avoid repeated divisions
     
     // Pulse output (0-15 each, combined 0-30)
     float pulse_out = 0.0f;
-    float pulse_sum = static_cast<float>(pulse1_.output + pulse2_.output);
+    std::uint8_t pulse_sum = pulse1_.output + pulse2_.output;
     if (pulse_sum > 0) {
-        pulse_out = 95.88f / ((8128.0f / pulse_sum) + 100.0f);
+        // Precompute: 95.88 / (8128/x + 100) = 95.88 * x / (8128 + 100*x)
+        pulse_out = (95.88f * pulse_sum) / (8128.0f + 100.0f * pulse_sum);
     }
     
-    // TND output (triangle, noise, DMC)
+    // TND output (triangle, noise, DMC) - optimized calculation
     float tnd_out = 0.0f;
-    float triangle_val = static_cast<float>(triangle_.output) / 8227.0f;
-    float noise_val = static_cast<float>(noise_.output) / 12241.0f;
-    float dmc_val = static_cast<float>(dmc_.output_level) / 22638.0f;
-    float tnd_sum = triangle_val + noise_val + dmc_val;
     
-    if (tnd_sum > 0) {
-        tnd_out = 159.79f / ((1.0f / tnd_sum) + 100.0f);
+    // Precompute divisors (these are constants: 8227, 12241, 22638)
+    constexpr float TRIANGLE_SCALE = 1.0f / 8227.0f;
+    constexpr float NOISE_SCALE = 1.0f / 12241.0f;
+    constexpr float DMC_SCALE = 1.0f / 22638.0f;
+    
+    float tnd_sum = static_cast<float>(triangle_.output) * TRIANGLE_SCALE +
+                    static_cast<float>(noise_.output) * NOISE_SCALE +
+                    static_cast<float>(dmc_.output_level) * DMC_SCALE;
+    
+    if (tnd_sum > 0.0f) {
+        // 159.79 / (1/x + 100) = 159.79 * x / (1 + 100*x)
+        tnd_out = (159.79f * tnd_sum) / (1.0f + 100.0f * tnd_sum);
     }
     
-    // Combined output (0.0 to ~1.0)
-    float mixed = pulse_out + tnd_out;
+    // Combined output - convert to -1.0 to 1.0 range
+    float mixed = (pulse_out + tnd_out) * 2.0f - 1.0f;
     
-    // Convert to -1.0 to 1.0 range
-    mixed = (mixed * 2.0f) - 1.0f;
-    mixed = std::clamp(mixed, -1.0f, 1.0f);
-    
-    sample_buffer_.push_back(mixed);
+    // Clamp (branchless using std::clamp)
+    sample_buffer_.push_back(std::clamp(mixed, -1.0f, 1.0f));
 }
 
 std::vector<float> APU::get_samples() {

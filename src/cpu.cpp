@@ -261,20 +261,8 @@ std::uint16_t CPU::pop16() {
 }
 
 // =============================================================================
-// Flag Operations
+// Flag Operations (set_nz only - get_flag/set_flag are now inline in header)
 // =============================================================================
-
-bool CPU::get_flag(Flag f) const {
-    return (status_ & (1 << static_cast<std::uint8_t>(f))) != 0;
-}
-
-void CPU::set_flag(Flag f, bool v) {
-    if (v) {
-        status_ |= (1 << static_cast<std::uint8_t>(f));
-    } else {
-        status_ &= ~(1 << static_cast<std::uint8_t>(f));
-    }
-}
 
 void CPU::set_nz(std::uint8_t value) {
     set_flag(Flag::Z, value == 0);

@@ -306,52 +306,9 @@ void PPU::fetch_sprite_patterns() {
     }
 }
 
-void PPU::render_sprite_pixel(std::uint8_t& sprite_pixel, std::uint8_t& sprite_palette, 
-                               bool& sprite_priority, bool& is_sprite_zero) {
-    sprite_pixel = 0;
-    sprite_palette = 0;
-    sprite_priority = false;
-    is_sprite_zero = false;
-    
-    if (!(mask_ & 0x10)) {
-        return;  // Sprites disabled
-    }
-    
-    int x = cycle_ - 1;
-    
-    // Check left-8-pixel clip for sprites
-    if (x < 8 && !(mask_ & 0x04)) {
-        return;
-    }
-    
-    // Find first non-transparent sprite pixel
-    for (int i = 0; i < sprite_count_; ++i) {
-        // Check if this sprite's X counter has reached 0 (sprite is active)
-        int sprite_x = sprite_x_counters_[i];
-        int offset = x - sprite_x;
-        
-        if (offset >= 0 && offset < 8) {
-            // Get pixel from shift register
-            std::uint8_t bit = 7 - offset;
-            std::uint8_t pixel_lo = (sprite_shifter_pattern_lo_[i] >> bit) & 0x01;
-            std::uint8_t pixel_hi = (sprite_shifter_pattern_hi_[i] >> bit) & 0x01;
-            std::uint8_t pixel = (pixel_hi << 1) | pixel_lo;
-            
-            if (pixel != 0) {
-                // Found a non-transparent pixel
-                sprite_pixel = pixel;
-                sprite_palette = (sprite_attributes_[i] & 0x03) + 4;  // Sprite palettes are 4-7
-                sprite_priority = (sprite_attributes_[i] & 0x20) != 0;  // Behind background
-                is_sprite_zero = sprite_is_sprite0_[i];
-                return;  // First sprite wins (lowest OAM index has priority)
-            }
-        }
-    }
-}
-
 void PPU::render_pixel() {
-    int x = cycle_ - 1;
-    int y = scanline_;
+    const int x = cycle_ - 1;
+    const int y = scanline_;
     
     if (x < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT) {
         return;
@@ -360,17 +317,21 @@ void PPU::render_pixel() {
     std::uint8_t bg_pixel = 0;
     std::uint8_t bg_palette = 0;
     
+    // Cache mask value to avoid repeated memory reads
+    const std::uint8_t mask = mask_;
+    
     // Get background pixel if rendering enabled
-    if (mask_ & 0x08) {
-        if (x >= 8 || (mask_ & 0x02)) {
-            std::uint16_t bit_mux = 0x8000 >> fine_x_;
+    if (mask & 0x08) {
+        // Check left 8 pixel clipping
+        if (x >= 8 || (mask & 0x02)) {
+            const std::uint16_t bit_mux = 0x8000 >> fine_x_;
             
-            std::uint8_t pixel_lo = (bg_shifter_pattern_lo_ & bit_mux) ? 1 : 0;
-            std::uint8_t pixel_hi = (bg_shifter_pattern_hi_ & bit_mux) ? 1 : 0;
+            const std::uint8_t pixel_lo = (bg_shifter_pattern_lo_ & bit_mux) ? 1 : 0;
+            const std::uint8_t pixel_hi = (bg_shifter_pattern_hi_ & bit_mux) ? 1 : 0;
             bg_pixel = (pixel_hi << 1) | pixel_lo;
             
-            std::uint8_t palette_lo = (bg_shifter_attrib_lo_ & bit_mux) ? 1 : 0;
-            std::uint8_t palette_hi = (bg_shifter_attrib_hi_ & bit_mux) ? 1 : 0;
+            const std::uint8_t palette_lo = (bg_shifter_attrib_lo_ & bit_mux) ? 1 : 0;
+            const std::uint8_t palette_hi = (bg_shifter_attrib_hi_ & bit_mux) ? 1 : 0;
             bg_palette = (palette_hi << 1) | palette_lo;
         }
     }
@@ -381,61 +342,77 @@ void PPU::render_pixel() {
     bool sprite_priority = false;
     bool is_sprite_zero = false;
     
-    render_sprite_pixel(sprite_pixel, sprite_palette, sprite_priority, is_sprite_zero);
-    
-    // Determine final pixel
-    std::uint8_t final_pixel = 0;
-    std::uint8_t final_palette = 0;
-    
-    if (bg_pixel == 0 && sprite_pixel == 0) {
-        // Both transparent - use background color
-        final_pixel = 0;
-        final_palette = 0;
-    } else if (bg_pixel == 0 && sprite_pixel != 0) {
-        // Only sprite visible
-        final_pixel = sprite_pixel;
-        final_palette = sprite_palette;
-    } else if (bg_pixel != 0 && sprite_pixel == 0) {
-        // Only background visible
-        final_pixel = bg_pixel;
-        final_palette = bg_palette;
-    } else {
-        // Both visible - check priority
-        if (sprite_priority) {
-            // Sprite behind background
-            final_pixel = bg_pixel;
-            final_palette = bg_palette;
-        } else {
-            // Sprite in front of background
-            final_pixel = sprite_pixel;
-            final_palette = sprite_palette;
-        }
-        
-        // Sprite 0 hit detection
-        if (is_sprite_zero && sprite_zero_hit_possible_) {
-            // Sprite 0 hit occurs when both BG and sprite are opaque
-            // and both BG and sprite rendering are enabled
-            if ((mask_ & 0x18) == 0x18) {
-                // Don't trigger at x=255 or if left clipping affects it
-                if (x < 255) {
-                    if (x >= 8 || ((mask_ & 0x06) == 0x06)) {
-                        status_ |= 0x40;  // Set sprite 0 hit
+    // Only check sprites if sprite rendering is enabled
+    if (mask & 0x10) {
+        // Check left-8-pixel clip for sprites
+        if (x >= 8 || (mask & 0x04)) {
+            // Find first non-transparent sprite pixel
+            for (int i = 0; i < sprite_count_; ++i) {
+                const int sprite_x = sprite_x_counters_[i];
+                const int offset = x - sprite_x;
+                
+                if (offset >= 0 && offset < 8) {
+                    const std::uint8_t bit = 7 - offset;
+                    const std::uint8_t pixel_lo = (sprite_shifter_pattern_lo_[i] >> bit) & 0x01;
+                    const std::uint8_t pixel_hi = (sprite_shifter_pattern_hi_[i] >> bit) & 0x01;
+                    const std::uint8_t pixel = (pixel_hi << 1) | pixel_lo;
+                    
+                    if (pixel != 0) {
+                        sprite_pixel = pixel;
+                        sprite_palette = (sprite_attributes_[i] & 0x03) + 4;
+                        sprite_priority = (sprite_attributes_[i] & 0x20) != 0;
+                        is_sprite_zero = sprite_is_sprite0_[i];
+                        break;  // First sprite wins
                     }
                 }
             }
         }
     }
     
-    // Get color from palette
-    std::uint8_t palette_index = (final_palette << 2) | final_pixel;
-    if (final_pixel == 0) {
-        palette_index = 0;  // Transparent always uses palette index 0
+    // Determine final pixel - simplified logic
+    std::uint8_t final_pixel;
+    std::uint8_t final_palette;
+    
+    if (bg_pixel == 0) {
+        // Background transparent
+        final_pixel = sprite_pixel;
+        final_palette = (sprite_pixel != 0) ? sprite_palette : 0;
+    } else if (sprite_pixel == 0) {
+        // Sprite transparent
+        final_pixel = bg_pixel;
+        final_palette = bg_palette;
+    } else {
+        // Both visible - check priority and sprite 0 hit
+        if (sprite_priority) {
+            final_pixel = bg_pixel;
+            final_palette = bg_palette;
+        } else {
+            final_pixel = sprite_pixel;
+            final_palette = sprite_palette;
+        }
+        
+        // Sprite 0 hit detection
+        if (is_sprite_zero && sprite_zero_hit_possible_ && (mask & 0x18) == 0x18) {
+            if (x < 255 && (x >= 8 || (mask & 0x06) == 0x06)) {
+                status_ |= 0x40;
+            }
+        }
     }
     
-    std::uint8_t color_index = ppu_read(0x3F00 + palette_index) & 0x3F;
-    std::uint32_t color = NES_PALETTE[color_index];
+    // Get color from palette - optimized path
+    std::uint8_t palette_index = (final_pixel == 0) ? 0 : ((final_palette << 2) | final_pixel);
+    std::uint8_t color_index = palette_[palette_index & 0x1F] & 0x3F;
     
-    framebuffer_[y * SCREEN_WIDTH + x] = color;
+    framebuffer_[y * SCREEN_WIDTH + x] = NES_PALETTE[color_index];
+}
+
+void PPU::render_sprite_pixel(std::uint8_t& sprite_pixel, std::uint8_t& sprite_palette, 
+                               bool& sprite_priority, bool& is_sprite_zero) {
+    // This function is now inlined into render_pixel for better performance
+    sprite_pixel = 0;
+    sprite_palette = 0;
+    sprite_priority = false;
+    is_sprite_zero = false;
 }
 
 void PPU::load_background_shifters() {

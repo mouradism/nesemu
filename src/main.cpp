@@ -253,42 +253,27 @@ int main(int argc, char** argv) {
             }
         }
 
-        // Update framebuffer
+        // Update framebuffer and render
         ++frame_counter;
         if (rom_loaded) {
-            // Use real PPU output when ROM is loaded
-            // PPU may not have frame_ready flag working, so render every frame
-            framebuffer = ppu.get_framebuffer();
+            // Use real PPU output when ROM is loaded - pass reference directly to avoid copy
+            video.update_frame(ppu.get_framebuffer());
             if (ppu.frame_ready()) {
                 ppu.clear_frame_ready();
             }
         } else {
             // Use test pattern when no ROM loaded
             generate_test_pattern(framebuffer, frame_counter);
+            video.update_frame(framebuffer);
         }
 
         // Render frame
-        video.update_frame(framebuffer);
         video.render();
 
         // Frame timing - maintain 60 FPS
         Uint32 frame_time = SDL_GetTicks() - frame_start_time;
         if (frame_time < NESConfig::FRAME_TIME_MS) {
             SDL_Delay(NESConfig::FRAME_TIME_MS - frame_time);
-        }
-
-        // Debug output every second
-        if (frame_counter % NESConfig::TARGET_FPS == 0) {
-            std::cout << "Frame: " << frame_counter;
-            if (ppu.frame_ready()) {
-                std::cout << " | PPU ready: YES";
-            } else {
-                std::cout << " | PPU ready: NO";
-            }
-            if (controller1.get_state() != 0) {
-                std::cout << " | P1: 0x" << std::hex << static_cast<int>(controller1.get_state()) << std::dec;
-            }
-            std::cout << "\n";
         }
     }
 

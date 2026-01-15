@@ -72,9 +72,17 @@ public:
     void set_pc(std::uint16_t v) { pc_ = v; }
     void set_status(std::uint8_t v) { status_ = v; }
     
-    // Flag accessors
-    bool get_flag(Flag f) const;
-    void set_flag(Flag f, bool v);
+    // Flag accessors - inline for performance
+    [[nodiscard]] bool get_flag(Flag f) const {
+        return (status_ & (1 << static_cast<std::uint8_t>(f))) != 0;
+    }
+    void set_flag(Flag f, bool v) {
+        if (v) {
+            status_ |= (1 << static_cast<std::uint8_t>(f));
+        } else {
+            status_ &= ~(1 << static_cast<std::uint8_t>(f));
+        }
+    }
 
 private:
     Memory& bus_;
