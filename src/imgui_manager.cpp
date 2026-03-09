@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
+#include "ImGuiFileDialog.h"
 #include "cpu.hpp"
 #include "ppu.hpp"
 #include "apu.hpp"
@@ -60,6 +61,20 @@ void ImGuiManager::render() {
         draw_debug_window();
     }
 
+    // Handle file dialog
+    if (show_file_dialog_) {
+        ImGuiFileDialog::Instance()->OpenDialog("ChooseROM", "Choose ROM File", ".nes", ".");
+    }
+
+    if (ImGuiFileDialog::Instance()->Display("ChooseROM")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            selected_rom_path_ = ImGuiFileDialog::Instance()->GetFilePathName();
+            rom_load_requested_ = true;
+        }
+        ImGuiFileDialog::Instance()->Close();
+        show_file_dialog_ = false;
+    }
+
     // Rendering
     ImGui::Render();
     // Note: OpenGL calls are handled by ImGui_ImplOpenGL3_RenderDrawData in video.cpp
@@ -97,6 +112,10 @@ void ImGuiManager::draw_debug_window() {
     if (ImGui::Begin("NES Emulator Debug", &show_debug_window_)) {
         ImGui::Text("NES Emulator - Debug Console");
         ImGui::Separator();
+
+        if (ImGui::Button("Load ROM")) {
+            show_file_dialog_ = true;
+        }
 
         if (ImGui::BeginTabBar("##DebugTabs")) {
             if (ImGui::BeginTabItem("Performance")) {
