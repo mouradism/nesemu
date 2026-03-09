@@ -13,11 +13,36 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          libsdl2-dev \
+          libgl1-mesa-dev \
+          libglu1-mesa-dev
+
+    - name: Configure
+      run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build
+
+    - name: Run tests
+      run: ctest --test-dir build --output-on-failure
+
+    - name: Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: nesemu-linux-x64
+        path: |
+          build/nesemu
+          build/apu_test
+          build/ppu_test
+          build/cartridge_test
+          build/mapper_test
+          build/memory_test
+          build/controller_test
+          build/cpu_test
