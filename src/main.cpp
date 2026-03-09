@@ -18,6 +18,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <memory>
 
 // NES timing constants
 namespace NESConfig {
@@ -70,9 +71,12 @@ int main(int argc, char** argv) {
     std::cout << "Starting nesemu...\n";
     std::cout << Input::get_default_mapping() << "\n\n";
     
+    // Load cartridge
+    std::unique_ptr<Cartridge> cart;
+    bool rom_loaded = false;
+    
     // Determine which ROM to load
     std::string rom_path;
-    bool rom_loaded = false;
     
     // Priority 1: Check command line argument
     if (argc >= 2) {
@@ -93,8 +97,8 @@ int main(int argc, char** argv) {
     }
     
     // Load cartridge
-    Cartridge cart(rom_path);
-    rom_loaded = cart.loaded();
+    cart = std::make_unique<Cartridge>(rom_path);
+    rom_loaded = cart->loaded();
     
     if (!rom_path.empty() && !rom_loaded) {
         std::cerr << "Warning: Failed to load ROM: " << rom_path << '\n';
@@ -103,25 +107,25 @@ int main(int argc, char** argv) {
     
     if (rom_loaded) {
         std::cout << "? ROM loaded successfully!\n";
-        std::cout << "  PRG ROM: " << (cart.prg_banks() * 16) << " KB\n";
-        std::cout << "  CHR ROM: " << (cart.chr_banks() * 8) << " KB\n";
-        std::cout << "  Mapper: " << static_cast<int>(cart.mapper_id()) << " (" << cart.mapper_name() << ")\n";
+        std::cout << "  PRG ROM: " << (cart->prg_banks() * 16) << " KB\n";
+        std::cout << "  CHR ROM: " << (cart->chr_banks() * 8) << " KB\n";
+        std::cout << "  Mapper: " << static_cast<int>(cart->mapper_id()) << " (" << cart->mapper_name() << ")\n";
     }
 
     // Initialize emulation components
-    Memory bus(cart);
-    CPU cpu(bus);
-    PPU ppu(bus);
-    APU apu;
+    std::unique_ptr<Memory> bus = std::make_unique<Memory>(*cart);
+    std::unique_ptr<CPU> cpu = std::make_unique<CPU>(*bus);
+    std::unique_ptr<PPU> ppu = std::make_unique<PPU>(*bus);
+    std::unique_ptr<APU> apu = std::make_unique<APU>();
     
     // Initialize controllers
     Controller controller1;
     Controller controller2;
     
     // Wire controllers to memory bus
-    bus.set_ppu(&ppu);
-    bus.set_apu(&apu);
-    bus.set_controllers(&controller1, &controller2);
+    bus->set_ppu(ppu.get());
+    bus->set_apu(apu.get());
+    bus->set_controllers(&controller1, &controller2);
     
     // Initialize input handler
     Input input;
@@ -150,16 +154,16 @@ int main(int argc, char** argv) {
 
     // Set emulator references in ImGui manager (after audio is initialized)
     if (video.get_imgui_manager()) {
-        video.get_imgui_manager()->set_emulator_refs(&cpu, &ppu, &apu, &audio, &controller1, &controller2);
+        video.get_imgui_manager()->set_emulator_refs(cpu.get(), ppu.get(), apu.get(), &audio, &controller1, &controller2);
     }
 
     // Allocate framebuffer for NES resolution
     std::vector<std::uint32_t> framebuffer(NESConfig::SCREEN_WIDTH * NESConfig::SCREEN_HEIGHT, 0);
 
     // Reset emulation components
-    cpu.reset();
-    ppu.reset();
-    apu.reset();
+    cpu->reset();
+    ppu->reset();
+    apu->reset();
     controller1.reset();
     controller2.reset();
 
@@ -204,6 +208,44 @@ int main(int argc, char** argv) {
         // Also update from keyboard state (for held keys)
         input.update_from_keyboard_state();
         
+        // Check for ROM load request
+        if (video.get_imgui_manager() && video.get_imgui_manager()->is_rom_load_requested()) {
+            std::string new_rom = video.get_imgui_manager()->get_selected_rom_path();
+            video.get_imgui_manager()->clear_rom_load_request();
+            
+            auto new_cart = std::make_unique<Cartridge>(new_rom);
+            if (new_cart->loaded()) {
+                cart = std::move(new_cart);
+                bus = std::make_unique<Memory>(*cart);
+                cpu = std::make_unique<CPU>(*bus);
+                ppu = std::make_unique<PPU>(*bus);
+                apu = std::make_unique<APU>();
+                
+                bus->set_ppu(ppu.get());
+                bus->set_apu(apu.get());
+                bus->set_controllers(&controller1, &controller2);
+                
+                cpu->reset();
+                ppu->reset();
+                apu->reset();
+                controller1.reset();
+                controller2.reset();
+                
+                rom_loaded = true;
+                
+                if (video.get_imgui_manager()) {
+                    video.get_imgui_manager()->set_emulator_refs(cpu.get(), ppu.get(), apu.get(), &audio, &controller1, &controller2);
+                }
+                
+                std::cout << "New ROM loaded: " << new_rom << std::endl;
+                std::cout << "  PRG ROM: " << (cart->prg_banks() * 16) << " KB\n";
+                std::cout << "  CHR ROM: " << (cart->chr_banks() * 8) << " KB\n";
+                std::cout << "  Mapper: " << static_cast<int>(cart->mapper_id()) << " (" << cart->mapper_name() << ")\n";
+            } else {
+                std::cerr << "Failed to load new ROM: " << new_rom << std::endl;
+            }
+        }
+        
         if (!video.is_running()) {
             break;
         }
@@ -211,28 +253,28 @@ int main(int argc, char** argv) {
         // Emulate one frame worth of CPU/PPU/APU cycles
         int cycles_this_frame = 0;
         while (cycles_this_frame < NESConfig::CPU_CYCLES_PER_FRAME) {
-            int cpu_cycles = cpu.step();
+            int cpu_cycles = cpu->step();
             cycles_this_frame += cpu_cycles;
 
             // PPU runs 3x faster than CPU
             for (int i = 0; i < cpu_cycles * 3; ++i) {
-                ppu.step();
+                ppu->step();
             }
 
             // APU runs at CPU speed
             for (int i = 0; i < cpu_cycles; ++i) {
-                apu.clock();
+                apu->clock();
             }
             
             // Handle NMI from PPU
-            if (ppu.nmi_occurred()) {
-                ppu.clear_nmi();
-                cpu.nmi();  // Trigger NMI on CPU
+            if (ppu->nmi_occurred()) {
+                ppu->clear_nmi();
+                cpu->nmi();  // Trigger NMI on CPU
             }
             
             // Handle OAM DMA
-            if (bus.dma_pending()) {
-                bus.execute_dma();
+            if (bus->dma_pending()) {
+                bus->execute_dma();
                 // DMA takes 513-514 CPU cycles
                 cycles_this_frame += 514;
             }
@@ -242,7 +284,7 @@ int main(int argc, char** argv) {
         if (audio.is_initialized()) {
             if (rom_loaded) {
                 // Use APU output for real ROM
-                audio_samples = apu.get_samples();
+                audio_samples = apu->get_samples();
             } else {
                 // Use test tone when no ROM loaded
                 generate_test_tone(audio_samples, test_tone_phase);
@@ -258,9 +300,9 @@ int main(int argc, char** argv) {
         if (rom_loaded) {
             // Use real PPU output when ROM is loaded
             // PPU may not have frame_ready flag working, so render every frame
-            framebuffer = ppu.get_framebuffer();
-            if (ppu.frame_ready()) {
-                ppu.clear_frame_ready();
+            framebuffer = ppu->get_framebuffer();
+            if (ppu->frame_ready()) {
+                ppu->clear_frame_ready();
             }
         } else {
             // Use test pattern when no ROM loaded
@@ -280,7 +322,7 @@ int main(int argc, char** argv) {
         // Debug output every second
         if (frame_counter % NESConfig::TARGET_FPS == 0) {
             std::cout << "Frame: " << frame_counter;
-            if (ppu.frame_ready()) {
+            if (ppu->frame_ready()) {
                 std::cout << " | PPU ready: YES";
             } else {
                 std::cout << " | PPU ready: NO";

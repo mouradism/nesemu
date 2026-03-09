@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <cstdint>
+#include <string>
 
 class CPU;
 class PPU;
@@ -39,6 +40,11 @@ public:
     bool wants_mouse() const;
     bool wants_keyboard() const;
 
+    // ROM loading
+    bool is_rom_load_requested() const { return rom_load_requested_; }
+    const std::string& get_selected_rom_path() const { return selected_rom_path_; }
+    void clear_rom_load_request() { rom_load_requested_ = false; selected_rom_path_.clear(); }
+
 private:
     SDL_Window* window_ = nullptr;
     SDL_GLContext gl_context_ = nullptr;
@@ -57,6 +63,11 @@ private:
     float fps_ = 0.0f;
     int frame_count_ = 0;
     float frame_time_ms_ = 0.0f;
+
+    // ROM loading state
+    bool show_file_dialog_ = false;
+    std::string selected_rom_path_;
+    bool rom_load_requested_ = false;
 
     // Debug UI functions
     void draw_debug_window();

@@ -66,6 +66,20 @@ target_include_directories(imgui PUBLIC
 
 target_link_libraries(imgui PUBLIC SDL2::SDL2 OpenGL::GL)
 
+# Fetch ImGuiFileDialog AFTER ImGui
+include(FetchContent)
+FetchContent_Declare(
+  ImGuiFileDialog
+  GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
+  GIT_TAG v0.6.5
+  GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(ImGuiFileDialog)
+
+# Add ImGui include to ImGuiFileDialog
+target_include_directories(ImGuiFileDialog PUBLIC ${imgui_SOURCE_DIR})
+
 # Main executable
 add_executable(nesemu
     src/main.cpp
@@ -81,7 +95,7 @@ add_executable(nesemu
 )
 
 target_include_directories(nesemu PRIVATE src)
-target_link_libraries(nesemu PRIVATE SDL2::SDL2 imgui OpenGL::GL)
+target_link_libraries(nesemu PRIVATE SDL2::SDL2 imgui ImGuiFileDialog OpenGL::GL)
 
 if(NOT SDL2_FOUND)
   # Copy SDL2 DLL to output directory
