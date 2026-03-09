@@ -2,7 +2,7 @@
 
 A comprehensive Nintendo Entertainment System (NES) emulator written in modern C++20, featuring accurate CPU/PPU/APU emulation, ImGui-based debugging tools, and support for multiple mapper types.
 
-## ?? Features
+##  Features
 
 ### Core Emulation
 - **6502 CPU** - Cycle-accurate implementation with all official and unofficial opcodes
@@ -23,7 +23,7 @@ A comprehensive Nintendo Entertainment System (NES) emulator written in modern C
 - **Performance Metrics** - FPS counter and per-frame timing
 - **Controller State Display** - Visual feedback for input states
 
-## ?? Quick Start
+##  Quick Start
 
 ### Prerequisites
 - **C++20 Compatible Compiler** (MSVC 2022, GCC 10+, Clang 10+)
@@ -74,29 +74,29 @@ nesemu.exe
 
 ```
 nesemu/
-??? src/                          # Source code
-?   ??? cpu.cpp/hpp              # 6502 CPU implementation
-?   ??? ppu.cpp/hpp              # PPU with scanline rendering
-?   ??? apu.cpp/hpp              # Audio synthesis engine
-?   ??? memory.cpp/hpp           # Memory bus and address decoding
-?   ??? cartridge.cpp/hpp        # ROM loader and cartridge handling
-?   ??? mapper*.cpp/hpp          # Mapper implementations (0,1,2,3)
-?   ??? audio.cpp/hpp            # SDL2 audio interface
-?   ??? video.cpp/hpp            # OpenGL rendering and ImGui integration
-?   ??? input.cpp/hpp            # Keyboard input mapping
-?   ??? controller.cpp/hpp       # NES controller emulation
-?   ??? imgui_manager.cpp/hpp    # ImGui debug interface
-?   ??? main.cpp                 # Entry point
-??? tests/                        # Unit tests (GTest)
-?   ??? cpu_test.cpp
-?   ??? ppu_test.cpp
-?   ??? apu_test.cpp
-?   ??? memory_test.cpp
-?   ??? cartridge_test.cpp
-?   ??? mapper_test.cpp
-??? roms/                         # Game ROMs (not included)
-??? CMakeLists.txt              # Build configuration
-??? README.md                    # This file
+ src/                          # Source code
+    cpu.cpp/hpp              # 6502 CPU implementation
+    ppu.cpp/hpp              # PPU with scanline rendering
+    apu.cpp/hpp              # Audio synthesis engine
+    memory.cpp/hpp           # Memory bus and address decoding
+    cartridge.cpp/hpp        # ROM loader and cartridge handling
+    mapper*.cpp/hpp          # Mapper implementations (0,1,2,3)
+    audio.cpp/hpp            # SDL2 audio interface
+    video.cpp/hpp            # OpenGL rendering and ImGui integration
+    input.cpp/hpp            # Keyboard input mapping
+    controller.cpp/hpp       # NES controller emulation
+    imgui_manager.cpp/hpp    # ImGui debug interface
+    main.cpp                 # Entry point
+ tests/                        # Unit tests (GTest)
+    cpu_test.cpp
+    ppu_test.cpp
+    apu_test.cpp
+    memory_test.cpp
+    cartridge_test.cpp
+    mapper_test.cpp
+ roms/                         # Game ROMs (not included)
+ CMakeLists.txt              # Build configuration
+ README.md                    # This file
 ```
 
 ## ??? Architecture
@@ -223,7 +223,7 @@ cmake -B build -G Ninja
 cmake --build build
 ```
 
-## ?? Dependencies
+##  Dependencies
 
 - **SDL2** - Cross-platform window and audio management
 - **OpenGL 2.1+** - Hardware-accelerated rendering
@@ -233,7 +233,7 @@ cmake --build build
 
 All dependencies are automatically fetched via CMake's FetchContent.
 
-## ?? Configuration
+##  Configuration
 
 ### Emulation Settings (src/main.cpp)
 - `SCREEN_WIDTH`: 256 pixels
@@ -248,7 +248,7 @@ All dependencies are automatically fetched via CMake's FetchContent.
 - Min buffer: 512 samples for underrun protection
 - Max buffer: 2048 samples to minimize latency
 
-## ?? Performance
+##  Performance
 
 Typical performance on modern hardware:
 
@@ -267,14 +267,14 @@ Typical performance on modern hardware:
 - **Palettes**: Uses standard NES palette (no custom palettes)
 - **Video Filters**: Nearest-neighbor only (no scaling filters)
 
-## ?? Git Branches
+##  Git Branches
 
 - **`master`** - Stable release branch (public)
 - **`imgui`** - ImGui debug UI development
 - **`dev`** - General development work
 - **`cpuDev`** - CPU-specific optimizations
 
-## ?? License
+##  License
 
 This project is provided as-is for educational purposes. NES is a trademark of Nintendo.
 
@@ -282,14 +282,14 @@ This project is provided as-is for educational purposes. NES is a trademark of N
 
 For private contributions, please contact the repository owner.
 
-## ?? References
+##  References
 
 - **NES Architecture**: https://wiki.nesdev.org/
 - **6502 CPU**: http://6502.org/
 - **Mapper Database**: https://wiki.nesdev.org/w/index.php/Mapper
 - **PPU Documentation**: https://wiki.nesdev.org/w/index.php/PPU
 
-## ?? Future Enhancements
+##  Future Enhancements
 
 - [ ] Additional mapper support (MMC2, MMC3, MMC4, etc.)
 - [ ] Save state functionality
@@ -300,13 +300,13 @@ For private contributions, please contact the repository owner.
 - [ ] Input recording and playback
 - [ ] Profiling and optimization tools
 
-## ?? Support
+##  Support
 
 For issues, questions, or suggestions, please visit:
 https://github.com/mouradism/nesemu
 
 ---
 
-**Status**: ? Actively Maintained  
+**Status**:  Actively Maintained  
 **Last Updated**: January 2025  
 **Version**: 1.0.0
