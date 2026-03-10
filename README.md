@@ -1,4 +1,5 @@
 # NES Emulator (nesemu)
+<img width="1040" height="566" alt="image" src="https://github.com/user-attachments/assets/82a5188b-77c6-4119-b856-e89d2342d8c2" />
 
 A comprehensive Nintendo Entertainment System (NES) emulator written in modern C++20, featuring accurate CPU/PPU/APU emulation, ImGui-based debugging tools, and support for multiple mapper types.
 
