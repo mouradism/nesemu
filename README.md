@@ -53,9 +53,9 @@ cmake --build out/build/x64-debug --target nesemu
 
 ```bash
 # Run with a specific ROM
-nesemu.exe "Super_Mario_Bros.nes"
-<img width="1036" height="563" alt="image" src="https://github.com/user-attachments/assets/8a1302a7-9286-4c62-be0e-3f92d3374470" />
 
+<img width="1043" height="555" alt="image" src="https://github.com/user-attachments/assets/62593792-412e-4a7e-bc65-d5283cf4b2ce" />
+nesemu.exe "Super_Mario_Bros.nes"
 # Run without arguments (demo mode with test pattern)
 nesemu.exe
 ```
