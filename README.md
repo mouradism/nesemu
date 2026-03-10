@@ -1,6 +1,6 @@
 # NES Emulator (nesemu)
 <img width="1040" height="566" alt="image" src="https://github.com/user-attachments/assets/82a5188b-77c6-4119-b856-e89d2342d8c2" />
-
+<img width="1043" height="555" alt="image" src="https://github.com/user-attachments/assets/62593792-412e-4a7e-bc65-d5283cf4b2ce" />
 A comprehensive Nintendo Entertainment System (NES) emulator written in modern C++20, featuring accurate CPU/PPU/APU emulation, ImGui-based debugging tools, and support for multiple mapper types.
 
 ##  Features
@@ -54,7 +54,7 @@ cmake --build out/build/x64-debug --target nesemu
 ```bash
 # Run with a specific ROM
 
-<img width="1043" height="555" alt="image" src="https://github.com/user-attachments/assets/62593792-412e-4a7e-bc65-d5283cf4b2ce" />
+
 nesemu.exe "Super_Mario_Bros.nes"
 # Run without arguments (demo mode with test pattern)
 nesemu.exe
