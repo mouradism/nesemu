@@ -302,10 +302,25 @@ For private contributions, please contact the repository owner.
 - [ ] Input recording and playback
 - [ ] Profiling and optimization tools
 
+## 📦 Releases
+
+Pre-built binaries for Windows, Linux, and macOS are available on the [GitHub Releases page](https://github.com/mouradism/NESemulator/releases).
+
+Each release includes:
+- Pre-compiled executable (`nesemu` / `nesemu.exe`)
+- Release notes describing changes and fixes
+
+To use a release:
+1. Download the appropriate archive for your platform from the [Releases page](https://github.com/mouradism/NESemulator/releases)
+2. Extract the archive
+3. Run `nesemu [path/to/rom.nes]`
+
+> If no pre-built binary is available for your platform, see the [Building from Source](#-building-from-source) section above.
+
 ##  Support
 
 For issues, questions, or suggestions, please visit:
-https://github.com/mouradism/nesemu
+https://github.com/mouradism/NESemulator
 
 ---
 
